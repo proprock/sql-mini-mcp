@@ -72,11 +72,17 @@ class DatabaseService:
                     ErrorCode.ACCESS_DENIED, "The database denied this operation."
                 ) from exc
             error = DomainError.unexpected()
-            logger.exception("Database operation failed; reference=%s", error.correlation_id)
+            logger.error("Database operation failed; reference=%s", error.correlation_id)
             raise error from exc
         except SQLAlchemyError as exc:
             error = DomainError.unexpected()
-            logger.exception("SQLAlchemy operation failed; reference=%s", error.correlation_id)
+            logger.error("SQLAlchemy operation failed; reference=%s", error.correlation_id)
+            raise error from exc
+        except Exception as exc:
+            error = DomainError.unexpected()
+            logger.error(
+                "Unexpected database operation failure; reference=%s", error.correlation_id
+            )
             raise error from exc
 
     def list_servers(self) -> ServerList:

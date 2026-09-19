@@ -16,3 +16,5 @@ __pycache__/
 /.hypothesis/
 /.mutmut-cache
 /mutants/
+/.cbm-cache/
+/.cbm-runtime/

@@ -1,0 +1,32 @@
+version: 1
+
+runtime:
+  max_concurrent_db_operations: 8
+  engine_cache_size: 32
+  pool_size: 2
+  max_overflow: 2
+  pool_timeout_seconds: 10
+  statement_timeout_seconds: 30
+  default_max_rows: 200
+  hard_max_rows: 1000
+
+servers:
+  legacy-prod:
+    engine: sqlserver
+    access_level: pii_safe
+    connection_url: >-
+      mssql+pyodbc://${LEGACY_PROD_USER}:${LEGACY_PROD_PASSWORD}
+      @${LEGACY_PROD_HOST}/master
+      ?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes
+    pii_key_env: LEGACY_PROD_PII_KEY
+    pii:
+      rules:
+        - database: "*"
+          schema: dbo
+          table: Users
+          columns: [Email, FirstName, LastName]
+
+  reporting-metadata:
+    engine: sqlserver
+    access_level: metadata
+    connection_url: "${REPORTING_SQL_URL}"

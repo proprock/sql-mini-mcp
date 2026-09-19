@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 from sqlalchemy import Connection, inspect
@@ -38,7 +38,7 @@ def _dict_or_none(value: Any) -> dict[str, Any] | None:
 
 
 def _normalize_columns(
-    connection: Connection, columns: Iterable[dict[str, Any]]
+    connection: Connection, columns: Iterable[Mapping[str, Any]]
 ) -> list[ColumnDefinition]:
     result: list[ColumnDefinition] = []
     for column in columns:
