@@ -31,9 +31,11 @@ Prefer explicit code, small public APIs, stable schemas, and compatibility over 
 speculative functionality and trivial new dependencies.
 
 Use `feature/` branches. Write a focused failing test before each behavior change. Keep commits
-small and use Conventional Commit subjects. Fast checks run for every task; live database and deep
-security checks run before merging the corresponding milestone. Squash merge reviewed feature
-branches and delete them after merge.
+small and use Conventional Commit subjects. Fast checks run for every task. The live SQL Server suite
+is mandatory before a milestone is closed or merged, and during any task that changes SQL
+generation, execution, result encoding, or reflection (see the milestone live gate in
+[CHECKS.md](CHECKS.md)). Deep security checks run before merging the corresponding milestone.
+Squash merge reviewed feature branches and delete them after merge.
 
 Run the configured `prek` hooks before committing and never bypass them with `--no-verify`. Do not
 commit process or instruction-document changes without the user's explicit approval.
