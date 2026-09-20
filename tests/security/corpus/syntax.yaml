@@ -239,3 +239,41 @@
 - name: select with output clause style
   sql: "SELECT Id FROM Users OUTPUT INSERTED.Id"
   reason: not select syntax
+
+# --- read-only guarantees: side effects hidden in SELECT-shaped or wrapped statements ----------
+- name: next value for sequence
+  sql: "SELECT NEXT VALUE FOR dbo.Seq"
+  reason: advances a sequence, a write side effect
+- name: for update lock
+  sql: "SELECT Id FROM Users FOR UPDATE"
+  reason: row locking clause
+- name: for browse
+  sql: "SELECT Id FROM Users FOR BROWSE"
+  reason: browse-mode clause
+- name: cte wrapping insert
+  sql: "WITH x AS (SELECT Id FROM Users) INSERT INTO Canary SELECT Id FROM x"
+  reason: data-modifying statement behind a CTE
+- name: cte wrapping delete
+  sql: "WITH x AS (SELECT Id FROM Users) DELETE FROM Canary"
+  reason: data-modifying statement behind a CTE
+- name: cte wrapping update
+  sql: "WITH x AS (SELECT Id FROM Users) UPDATE Canary SET Id = 1"
+  reason: data-modifying statement behind a CTE
+- name: select into temp table
+  sql: "SELECT Id INTO #t FROM Users"
+  reason: creates a table
+- name: exec behind leading comment
+  sql: "/* SELECT */ EXEC xp_cmdshell 'whoami'"
+  reason: a leading comment must not pass for a select
+- name: exec behind line comment
+  sql: "-- SELECT Id\nEXEC xp_cmdshell 'whoami'"
+  reason: a leading comment must not pass for a select
+- name: pg sleep
+  sql: "SELECT pg_sleep(10)"
+  reason: side-effect function
+- name: nextval
+  sql: "SELECT nextval('seq')"
+  reason: side-effect function
+- name: set config
+  sql: "SELECT set_config('x', 'y', false)"
+  reason: side-effect function
