@@ -78,12 +78,12 @@ PyMySQL connection handling require it, and the milestone live gate requires it 
 SQL Server run:
 
 ```powershell
-.\scripts	est-mysql.ps1
+.\scripts\test-mysql.ps1
 ```
 
 Externally managed servers use `SQL_MINI_MCP_TEST_MYSQL_URL` and
 `SQL_MINI_MCP_TEST_MARIADB_URL` with `uv run pytest tests/integration/mysql -m integration`.
-`.\scripts	est-mysql.ps1 -Reset` removes the containers and volumes.
+`.\scripts\test-mysql.ps1 -Reset` removes the containers and volumes.
 
 Explicit local Docker cleanup is separate from the gate and removes the test container and volume:
 
