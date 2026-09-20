@@ -1,21 +1,17 @@
 from __future__ import annotations
 
 import asyncio
-import os
-import secrets
-from collections.abc import Iterator
-from dataclasses import dataclass
 from typing import Any
 from uuid import uuid4
 
 import pytest
+from live_support import LiveDatabase, quote_identifier
 from mcp import Client
 from mcp_types import TextContent
-from pydantic import SecretStr
-from sqlalchemy import Connection, create_engine, text
-from sqlalchemy.engine import URL, make_url
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
 
-from sql_mini_mcp.config import AppConfig, RuntimeConfig, ServerConfig
+from sql_mini_mcp.config import AppConfig
 from sql_mini_mcp.db.reflection import get_table_definition as reflect_table_definition
 from sql_mini_mcp.db.registry import EngineRegistry
 from sql_mini_mcp.mcp_server import create_server
@@ -23,206 +19,7 @@ from sql_mini_mcp.mcp_server import create_server
 pytestmark = pytest.mark.integration
 
 
-@dataclass(frozen=True, slots=True)
-class LiveDatabase:
-    admin_url: URL
-    config: AppConfig
-    database: str
-    alpha_schema: str
-    beta_schema: str
-
-
-def _identifier(value: str) -> str:
-    if not value.replace("_", "").isalnum():
-        raise ValueError("test identifiers must be alphanumeric with optional underscores")
-    return f"[{value}]"
-
-
-def _url_for(admin_url: URL, login: str, password: str, database: str) -> str:
-    return admin_url.set(
-        username=login,
-        password=password,
-        database=database,
-    ).render_as_string(hide_password=False)
-
-
-def _execute_batch(connection: Connection, statements: list[str]) -> None:
-    for statement in statements:
-        connection.exec_driver_sql(statement)
-
-
-@pytest.fixture(scope="module")
-def live_database() -> Iterator[LiveDatabase]:
-    raw_url = os.environ.get("SQL_MINI_MCP_TEST_SQLSERVER_URL")
-    if not raw_url:
-        pytest.skip("SQL_MINI_MCP_TEST_SQLSERVER_URL is not configured")
-
-    suffix = uuid4().hex[:12]
-    database = "SqlMiniMcpTests"
-    alpha_schema = f"alpha_{suffix}"
-    beta_schema = f"beta_{suffix}"
-    app_login = f"smm_app_{suffix}"
-    hidden_login = f"smm_hidden_{suffix}"
-    denied_login = f"smm_denied_{suffix}"
-    app_password = "App!A1" + secrets.token_hex(16)
-    hidden_password = "Hidden!A1" + secrets.token_hex(16)
-    denied_password = "Denied!A1" + secrets.token_hex(16)
-    admin_url = make_url(raw_url).set(database="master")
-    admin_engine = create_engine(admin_url, pool_pre_ping=True)
-
-    db = _identifier(database)
-    alpha = _identifier(alpha_schema)
-    beta = _identifier(beta_schema)
-    app = _identifier(app_login)
-    hidden = _identifier(hidden_login)
-    denied = _identifier(denied_login)
-
-    try:
-        with admin_engine.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
-            _execute_batch(
-                connection,
-                [
-                    f"IF DB_ID('{database}') IS NULL EXEC(N'CREATE DATABASE {db}')",
-                    f"ALTER DATABASE {db} SET COMPATIBILITY_LEVEL = 130",
-                    f"CREATE LOGIN {app} WITH PASSWORD = '{app_password}', CHECK_POLICY = OFF",
-                    f"CREATE LOGIN {hidden} WITH PASSWORD = '{hidden_password}', "
-                    "CHECK_POLICY = OFF",
-                    f"CREATE LOGIN {denied} WITH PASSWORD = '{denied_password}', "
-                    "CHECK_POLICY = OFF",
-                    f"CREATE USER {denied} FOR LOGIN {denied}",
-                    f"DENY SELECT ON OBJECT::sys.databases TO {denied}",
-                ],
-            )
-
-        database_admin = create_engine(admin_url.set(database=database), pool_pre_ping=True)
-        try:
-            with database_admin.begin() as connection:
-                _execute_batch(
-                    connection,
-                    [
-                        f"CREATE SCHEMA {alpha} AUTHORIZATION dbo",
-                        f"CREATE SCHEMA {beta} AUTHORIZATION dbo",
-                        f"CREATE TABLE {alpha}.[Parents] ("
-                        "[TenantId] int NOT NULL, [Id] int NOT NULL, "
-                        "CONSTRAINT [PK_Parents] PRIMARY KEY ([TenantId], [Id]))",
-                        f"CREATE TABLE {alpha}.[Users] ("
-                        "[TenantId] int NOT NULL, [Id] bigint IDENTITY(1,1) NOT NULL, "
-                        "[ParentId] int NOT NULL, [Email] nvarchar(100) NOT NULL, "
-                        "[Amount] decimal(10,2) NULL CONSTRAINT [DF_Users_Amount] DEFAULT ((0)), "
-                        "[DisplayKey] AS (concat([TenantId],'-',[Id])) PERSISTED, "
-                        "CONSTRAINT [PK_Users] PRIMARY KEY ([TenantId], [Id]), "
-                        "CONSTRAINT [FK_Users_Parents] FOREIGN KEY ([TenantId], [ParentId]) "
-                        f"REFERENCES {alpha}.[Parents] ([TenantId], [Id]), "
-                        "CONSTRAINT [UQ_Users_Email] UNIQUE ([TenantId], [Email]))",
-                        f"CREATE INDEX [IX_Users_Email] ON {alpha}.[Users] ([Email])",
-                        f"CREATE TABLE {beta}.[Users] ([Id] int NOT NULL PRIMARY KEY)",
-                        f"CREATE PROCEDURE {alpha}.[VisibleProc] AS SELECT 1 AS [Value]",
-                        f"CREATE PROCEDURE {alpha}.[HiddenProc] AS SELECT 2 AS [Value]",
-                        f"CREATE USER {app} FOR LOGIN {app}",
-                        f"CREATE USER {hidden} FOR LOGIN {hidden}",
-                        f"GRANT CONNECT TO {app}",
-                        f"GRANT SELECT ON SCHEMA::{alpha} TO {app}",
-                        f"GRANT SELECT ON SCHEMA::{beta} TO {app}",
-                        f"GRANT VIEW DEFINITION TO {app}",
-                        f"GRANT CONNECT TO {hidden}",
-                        f"GRANT EXECUTE ON OBJECT::{alpha}.[HiddenProc] TO {hidden}",
-                    ],
-                )
-        finally:
-            database_admin.dispose()
-
-        config = AppConfig(
-            version=1,
-            runtime=RuntimeConfig(
-                statement_timeout_seconds=2,
-                max_concurrent_db_operations=4,
-                pool_size=2,
-                max_overflow=2,
-                engine_cache_size=8,
-            ),
-            servers={
-                "legacy": ServerConfig(
-                    engine="sqlserver",
-                    connection_url=SecretStr(
-                        _url_for(admin_url, app_login, app_password, "master")
-                    ),
-                ),
-                "hidden": ServerConfig(
-                    engine="sqlserver",
-                    connection_url=SecretStr(
-                        _url_for(admin_url, hidden_login, hidden_password, "master")
-                    ),
-                ),
-                "denied": ServerConfig(
-                    engine="sqlserver",
-                    connection_url=SecretStr(
-                        _url_for(admin_url, denied_login, denied_password, "master")
-                    ),
-                ),
-            },
-        )
-        yield LiveDatabase(admin_url, config, database, alpha_schema, beta_schema)
-    finally:
-        admin_engine.dispose()
-        cleanup_engine = create_engine(admin_url, pool_pre_ping=True)
-        database_cleanup_engine = create_engine(
-            admin_url.set(database=database), pool_pre_ping=True
-        )
-        try:
-            with cleanup_engine.connect().execution_options(
-                isolation_level="AUTOCOMMIT"
-            ) as connection:
-                _execute_batch(
-                    connection,
-                    [
-                        "DECLARE @kill nvarchar(max) = N''; "
-                        "SELECT @kill += N'KILL ' + CONVERT(nvarchar(11), session_id) + N';' "
-                        "FROM sys.dm_exec_sessions WHERE login_name IN "
-                        f"(N'{app_login}', N'{hidden_login}', N'{denied_login}'); "
-                        "IF @kill <> N'' EXEC sys.sp_executesql @kill",
-                    ],
-                )
-            with database_cleanup_engine.connect().execution_options(
-                isolation_level="AUTOCOMMIT"
-            ) as connection:
-                _execute_batch(
-                    connection,
-                    [
-                        f"DROP PROCEDURE IF EXISTS {alpha}.[VisibleProc]",
-                        f"DROP PROCEDURE IF EXISTS {alpha}.[HiddenProc]",
-                        f"DROP TABLE IF EXISTS {beta}.[Users]",
-                        f"DROP TABLE IF EXISTS {alpha}.[Users]",
-                        f"DROP TABLE IF EXISTS {alpha}.[Parents]",
-                        f"IF USER_ID('{app_login}') IS NOT NULL DROP USER {app}",
-                        f"IF USER_ID('{hidden_login}') IS NOT NULL DROP USER {hidden}",
-                        f"IF SCHEMA_ID('{beta_schema}') IS NOT NULL DROP SCHEMA {beta}",
-                        f"IF SCHEMA_ID('{alpha_schema}') IS NOT NULL DROP SCHEMA {alpha}",
-                    ],
-                )
-            with cleanup_engine.connect().execution_options(
-                isolation_level="AUTOCOMMIT"
-            ) as connection:
-                _execute_batch(
-                    connection,
-                    [
-                        f"IF USER_ID('{denied_login}') IS NOT NULL DROP USER {denied}",
-                        "IF EXISTS (SELECT 1 FROM sys.server_principals "
-                        f"WHERE name = '{app_login}') "
-                        f"DROP LOGIN {app}",
-                        "IF EXISTS (SELECT 1 FROM sys.server_principals "
-                        f"WHERE name = '{hidden_login}') "
-                        f"DROP LOGIN {hidden}",
-                        "IF EXISTS (SELECT 1 FROM sys.server_principals "
-                        f"WHERE name = '{denied_login}') "
-                        f"DROP LOGIN {denied}",
-                    ],
-                )
-        finally:
-            database_cleanup_engine.dispose()
-            cleanup_engine.dispose()
-
-
-def test_live_all_six_metadata_tools(live_database: LiveDatabase) -> None:
+def test_live_all_metadata_tools(live_database: LiveDatabase) -> None:
     reflection_engine = create_engine(
         make_url(live_database.config.servers["legacy"].connection_url.get_secret_value()).set(
             database=live_database.database
@@ -252,6 +49,7 @@ def test_live_all_six_metadata_tools(live_database: LiveDatabase) -> None:
                 "get_table_definition",
                 "list_stored_procedures",
                 "get_stored_procedure",
+                "execute_sql",
             ]
             servers = await client.call_tool("list_servers")
             assert servers.is_error is False
@@ -259,6 +57,8 @@ def test_live_all_six_metadata_tools(live_database: LiveDatabase) -> None:
                 "legacy",
                 "hidden",
                 "denied",
+                "secure",
+                "secure2",
             }
             databases = await client.call_tool(
                 "list_databases",
@@ -418,7 +218,7 @@ def test_live_statement_timeout_and_pool_disposal(
             try:
                 lock_connection.execute(
                     text(
-                        f"ALTER TABLE {_identifier(live_database.alpha_schema)}.[Users] "
+                        f"ALTER TABLE {quote_identifier(live_database.alpha_schema)}.[Users] "
                         "ADD [TimeoutProbe] int NULL"
                     )
                 )
