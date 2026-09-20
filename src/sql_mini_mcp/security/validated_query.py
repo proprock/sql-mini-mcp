@@ -18,6 +18,7 @@ from sql_mini_mcp.security.parser import (
     validate_allowlist,
 )
 from sql_mini_mcp.security.policy import PolicyDecision
+from sql_mini_mcp.security.reasons import Reason
 from sql_mini_mcp.security.tokens import PREFIX
 
 _SEAL = object()
@@ -154,7 +155,7 @@ def _to_qmark(query: exp.Select, parameters: dict[str, Any]) -> tuple[str, tuple
     sql = rendered.sql(dialect=DIALECT)
     found = re.findall(rf"__bind_{nonce}_\d+__", sql)
     if len(found) != len(markers) or set(found) != set(markers):
-        raise reject("bind parameters could not be generated safely.")
+        raise reject(Reason.BIND_UNSAFE)
     for marker in found:
         sql = sql.replace(marker, "?", 1)
     return sql, tuple(parameters[markers[marker]] for marker in found)
@@ -186,7 +187,7 @@ def issue_validated_query(
     validate_allowlist(query, allow_placeholders=True)
     sql, ordered = _to_qmark(query, parameters)
     if PREFIX in sql:
-        raise reject("a PII token could not be replaced by a bind parameter.")
+        raise reject(Reason.TOKEN_NOT_REPLACED)
     outputs = tuple(
         OutputPlan(output.label, output.kind, output.source, protected)
         for output, protected in zip(analyzed.outputs, decision.protected, strict=True)

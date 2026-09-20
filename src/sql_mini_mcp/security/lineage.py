@@ -15,6 +15,7 @@ from sql_mini_mcp.security.parser import (
     reject,
     validate_allowlist,
 )
+from sql_mini_mcp.security.reasons import Reason
 from sql_mini_mcp.security.schema import TableSchema
 
 _CASE_SENSITIVE_DIALECT = f"{DIALECT}, normalization_strategy = case_sensitive"
@@ -65,13 +66,13 @@ def _collect(query: exp.Select, schemas: Sequence[TableSchema]) -> list[_Binding
         nodes.append(from_.this)
     nodes += [join.this for join in query.args.get("joins") or []]
     if len(nodes) != len(schemas):
-        raise reject("table resolution does not match the query.")
+        raise reject(Reason.TABLE_RESOLUTION_MISMATCH)
     bindings: list[_Binding] = []
     seen: set[str] = set()
     for node, table in zip(nodes, schemas, strict=True):
         name = node.alias or table.name
         if name.casefold() in seen:
-            raise reject("table names and aliases must be unique.")
+            raise reject(Reason.DUPLICATE_BINDING)
         seen.add(name.casefold())
         bindings.append(_Binding(name, table))
     return bindings
@@ -88,10 +89,10 @@ def _resolve(column: exp.Column, bindings: Sequence[_Binding]) -> tuple[_Binding
     if qualifier:
         matching = [b for b in bindings if b.name.casefold() == qualifier.casefold()]
         if len(matching) != 1:
-            raise reject("a column qualifier does not match a table in the query.")
+            raise reject(Reason.QUALIFIER_UNKNOWN)
         canonical = _canonical_column(matching[0], name)
         if canonical is None:
-            raise reject("a referenced column was not found or is ambiguous.")
+            raise reject(Reason.COLUMN_NOT_FOUND)
         return matching[0], canonical
     candidates = [
         (binding, canonical)
@@ -99,7 +100,7 @@ def _resolve(column: exp.Column, bindings: Sequence[_Binding]) -> tuple[_Binding
         if (canonical := _canonical_column(binding, name)) is not None
     ]
     if len(candidates) != 1:
-        raise reject("a referenced column was not found or is ambiguous; qualify it.")
+        raise reject(Reason.COLUMN_AMBIGUOUS)
     return candidates[0]
 
 
@@ -117,7 +118,7 @@ def _expand_stars(query: exp.Select, bindings: Sequence[_Binding]) -> None:
         elif isinstance(projection, exp.Column) and isinstance(projection.this, exp.Star):
             chosen = [b for b in bindings if b.name.casefold() == projection.table.casefold()]
             if len(chosen) != 1:
-                raise reject("a column qualifier does not match a table in the query.")
+                raise reject(Reason.QUALIFIER_UNKNOWN)
         else:
             expanded.append(projection)
             continue
@@ -160,7 +161,7 @@ def _resolve_order_column(
         if matches:
             # SQL Server resolves an unqualified ORDER BY name against output labels first.
             if len(matches) != 1 or matches[0].source is None:
-                raise reject("ORDER BY refers to an ambiguous or non-column output.")
+                raise reject(Reason.ORDER_OUTPUT_AMBIGUOUS)
             source = matches[0].source
             binding = next(b for b in bindings if b.name == matches[0].binding)
             return _rewrite(column, binding, source.column)
@@ -181,7 +182,7 @@ def _cross_check(query: exp.Select, schemas: Sequence[TableSchema]) -> None:
             expand_stars=False,
         )
     except (OptimizeError, SqlglotError) as exc:
-        raise reject("the query references unknown or ambiguous columns.") from exc
+        raise reject(Reason.QUALIFY_FAILED) from exc
 
 
 def analyze_query(

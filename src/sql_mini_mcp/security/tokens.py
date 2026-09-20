@@ -47,18 +47,6 @@ def _encode_float(value: float) -> float:
     return value
 
 
-def _decode_strict(kind: type, parse: Callable[[Any], Any], check: Callable[[Any, Any], bool]):
-    def decode(data: Any) -> Any:
-        if type(data) is not kind:
-            raise ValueError("wrong payload type")
-        value = parse(data)
-        if not check(value, data):
-            raise ValueError("non-canonical payload")
-        return value
-
-    return decode
-
-
 def _identity_check(_value: Any, _data: Any) -> bool:
     return True
 
@@ -84,18 +72,30 @@ _CODECS: dict[type, tuple[str, Callable[[Any], Any]]] = {
     UUID: ("uuid", str),
     bytes: ("bytes", lambda v: base64.b64encode(v).decode("ascii")),
 }
-_DECODERS: dict[str, Callable[[Any], Any]] = {
-    "str": _decode_strict(str, lambda d: d, _identity_check),
-    "bool": _decode_strict(bool, lambda d: d, _identity_check),
-    "int": _decode_strict(int, lambda d: d, _identity_check),
-    "float": _decode_strict(float, lambda d: d, _identity_check),
-    "decimal": _decode_strict(str, Decimal, _finite_decimal),
-    "date": _decode_strict(str, date.fromisoformat, lambda v, d: v.isoformat() == d),
-    "datetime": _decode_strict(str, datetime.fromisoformat, lambda v, d: v.isoformat() == d),
-    "time": _decode_strict(str, time.fromisoformat, lambda v, d: v.isoformat() == d),
-    "uuid": _decode_strict(str, UUID, lambda v, d: str(v) == d),
-    "bytes": _decode_strict(str, lambda d: base64.b64decode(d, validate=True), _bytes_check),
+# tag -> (JSON type of `d`, parser, canonical-form check); interpreted at decode time by
+# _decode_value so every branch runs (and can be verified) per call.
+_DECODERS: dict[str, tuple[type, Callable[[Any], Any], Callable[[Any, Any], bool]]] = {
+    "str": (str, lambda d: d, _identity_check),
+    "bool": (bool, lambda d: d, _identity_check),
+    "int": (int, lambda d: d, _identity_check),
+    "float": (float, lambda d: d, _identity_check),
+    "decimal": (str, Decimal, _finite_decimal),
+    "date": (str, date.fromisoformat, lambda v, d: v.isoformat() == d),
+    "datetime": (str, datetime.fromisoformat, lambda v, d: v.isoformat() == d),
+    "time": (str, time.fromisoformat, lambda v, d: v.isoformat() == d),
+    "uuid": (str, UUID, lambda v, d: str(v) == d),
+    "bytes": (str, lambda d: base64.b64decode(d, validate=True), _bytes_check),
 }
+
+
+def _decode_value(tag: str, data: Any) -> Any:
+    kind, parse, check = _DECODERS[tag]
+    if type(data) is not kind:
+        raise ValueError("wrong payload type")
+    value = parse(data)
+    if not check(value, data):
+        raise ValueError("non-canonical payload")
+    return value
 
 
 class TokenCodec:
@@ -173,7 +173,7 @@ class TokenCodec:
         version = document["v"]
         if type(version) is not int or version != _PAYLOAD_VERSION:
             raise ValueError
-        return _DECODERS[document["t"]](document["d"])
+        return _decode_value(document["t"], document["d"])
 
 
 class TokenKeyRegistry:

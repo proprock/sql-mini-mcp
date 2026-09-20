@@ -13,6 +13,7 @@ from sqlglot import exp
 
 from sql_mini_mcp.db.reflection import list_tables as reflect_tables
 from sql_mini_mcp.security.parser import reject
+from sql_mini_mcp.security.reasons import Reason
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,7 +93,7 @@ class ReflectedCatalog:
             try:
                 reflected = inspect(self._connection).get_columns(table, schema=schema or None)
             except NoSuchTableError as exc:
-                raise reject("a referenced table no longer exists.") from exc
+                raise reject(Reason.TABLE_GONE) from exc
             cached = tuple(str(column["name"]) for column in reflected)
             self._cache.put(key, cached)
         return cached
@@ -108,7 +109,7 @@ def _match(tables: Sequence[tuple[str, str]], schema: str | None, name: str) -> 
         and (folded_schema is None or table_schema.casefold() == folded_schema)
     ]
     if len(matches) != 1:
-        raise reject("a referenced table was not found or is ambiguous; qualify it with a schema.")
+        raise reject(Reason.TABLE_NOT_FOUND)
     return matches[0]
 
 
@@ -121,7 +122,7 @@ def resolve_tables(query: exp.Select, catalog: TableCatalog) -> tuple[TableSchem
     resolved: list[TableSchema] = []
     for table in query.find_all(exp.Table):
         if table.args.get("catalog") or not isinstance(table.this, exp.Identifier):
-            raise reject("only tables of the current database are supported.")
+            raise reject(Reason.TABLE_SCOPE)
         schema = table.db or None
         schema_name, table_name = _match(available, schema, table.name)
         resolved.append(

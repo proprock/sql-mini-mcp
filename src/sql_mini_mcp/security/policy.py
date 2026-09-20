@@ -7,6 +7,7 @@ from sqlglot import exp
 from sql_mini_mcp.config import PiiConfig
 from sql_mini_mcp.security.lineage import AnalyzedQuery, ColumnRef, SourceColumn
 from sql_mini_mcp.security.parser import reject
+from sql_mini_mcp.security.reasons import Reason
 from sql_mini_mcp.security.tokens import PREFIX, TokenCodec
 
 
@@ -57,7 +58,7 @@ class PiiPolicy:
                 and str(literal.this).startswith(PREFIX)
                 and id(literal) not in consumed
             ):
-                raise reject("a PII token can only be compared with a protected column.")
+                raise reject(Reason.TOKEN_OUTSIDE_PROTECTED)
         protected = tuple(
             output.source is not None and self.is_protected(output.source)
             for output in analyzed.outputs
@@ -72,12 +73,12 @@ class PiiPolicy:
         if isinstance(parent, exp.Alias) and isinstance(parent.parent, exp.Select):
             return []
         if not _in_where(column):
-            raise reject("a protected column can only be projected or compared with a token.")
+            raise reject(Reason.PROTECTED_POSITION)
         if isinstance(parent, exp.EQ) and parent.this is column:
             return [self._token_site(parent.expression)]
         if isinstance(parent, exp.In) and parent.this is column and parent.expressions:
             return [self._token_site(item) for item in parent.expressions]
-        raise reject("a protected column can only be projected or compared with a token.")
+        raise reject(Reason.PROTECTED_POSITION)
 
     def _token_site(self, node: exp.Expression) -> TokenSite:
         if (
@@ -85,7 +86,7 @@ class PiiPolicy:
             or not node.is_string
             or not str(node.this).startswith(PREFIX)
         ):
-            raise reject("a protected column can only be compared with a PII token.")
+            raise reject(Reason.PROTECTED_NEEDS_TOKEN)
         return TokenSite(node, self._codec.decrypt(str(node.this)))
 
 

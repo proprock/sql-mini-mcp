@@ -7,6 +7,12 @@ categories `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, and `Security`.
 
 ## [Unreleased]
 
+### Changed
+
+- `QUERY_REJECTED` errors from `execute_sql` now come from a fixed catalog of reasons. The wording
+  for unsupported syntax names the construct as `unsupported construct: <Node>` or
+  `unsupported option: <Node>.<argument>`; other reasons keep their earlier text.
+
 ### Security
 
 - `execute_sql` no longer forwards comments from the caller's SQL to the database. The executed
