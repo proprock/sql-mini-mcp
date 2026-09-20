@@ -51,6 +51,7 @@ include = [
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers"
 testpaths = ["tests"]
+pythonpath = ["tests/security"]
 markers = [
     "integration: requires a live database",
     "deep: expensive security verification",
@@ -82,3 +83,6 @@ quote-style = "double"
 
 [tool.ty.src]
 include = ["src", "tests"]
+
+[tool.ty.environment]
+extra-paths = ["tests/security"]

@@ -6,85 +6,17 @@ Each case must fail with its expected error code and must never call the databas
 from __future__ import annotations
 
 import asyncio
-import re
-from pathlib import Path
 from typing import Any
 
 import pytest
-import yaml
+from corpus_support import TokenSources, expand, load_cases
 from support import FOREIGN, OTHER_KEY, OWN, SpyConnection, spy_service
 
 from sql_mini_mcp.errors import DomainError, ErrorCode
 from sql_mini_mcp.security.tokens import PREFIX, TokenCodec
 from sql_mini_mcp.service import DatabaseService
 
-CORPUS = Path(__file__).parent / "corpus"
-TEMPLATE = re.compile(r"\{\{(\w+)(?::(.*?))?\}\}")
-
-
-def _own_token() -> str:
-    return OWN.encrypt("value")
-
-
-def _std_alphabet_token() -> str:
-    for _ in range(500):
-        token = _own_token()
-        body = token.removeprefix(PREFIX)
-        if "-" in body or "_" in body:
-            return PREFIX + body.replace("-", "+").replace("_", "/")
-    raise AssertionError("could not build a token with a url-safe character")
-
-
-def _flipped(token: str) -> str:
-    middle = len(PREFIX) + (len(token) - len(PREFIX)) // 2
-    replacement = "A" if token[middle] != "A" else "B"
-    return token[:middle] + replacement + token[middle + 1 :]
-
-
-def _expand(name: str, arg: str | None) -> str:
-    own = _own_token()
-    if name == "TOKEN_OWN":
-        return own
-    if name == "TOKEN_OTHER":
-        return FOREIGN.encrypt("value")
-    if name == "TOKEN_OTHER_KEY_SAME_ALIAS":
-        return TokenCodec("srv", OTHER_KEY).encrypt("value")
-    if name == "TOKEN_BODY":
-        return own.removeprefix(PREFIX)
-    if name == "TOKEN_TRUNCATED":
-        return own[:-8]
-    if name == "TOKEN_FLIPPED":
-        return _flipped(own)
-    if name == "TOKEN_STD_ALPHABET":
-        return _std_alphabet_token()
-    assert arg is not None, name
-    if name == "PAD":
-        return " " * int(arg)
-    text, _, count = arg.rpartition(":")
-    if name in {"PAD_CHAR", "REPEAT"}:
-        return text * int(count)
-    if name == "IN_LIST":
-        return ", ".join(str(i) for i in range(int(arg)))
-    if name == "NEST":
-        depth = int(arg)
-        return "(" * depth + "1" + ")" * depth
-    if name == "JOINS":
-        return "".join(f" JOIN Orders o{i} ON o{i}.Id = u.Id" for i in range(int(arg)))
-    raise AssertionError(f"unknown corpus template {name}")
-
-
-def expand(sql: str) -> str:
-    return TEMPLATE.sub(lambda match: _expand(match.group(1), match.group(2)), sql)
-
-
-def load_cases() -> list[tuple[str, dict[str, Any]]]:
-    cases: list[tuple[str, dict[str, Any]]] = []
-    for path in sorted(CORPUS.glob("*.yaml")):
-        for case in yaml.safe_load(path.read_text(encoding="utf-8")):
-            cases.append((f"{path.stem}::{case['name']}", case))
-    return cases
-
-
+TOKENS = TokenSources(OWN, FOREIGN, TokenCodec("srv", OTHER_KEY))
 CASES = load_cases()
 
 
@@ -111,7 +43,7 @@ def test_corpus_case_is_rejected_without_reaching_the_database(
     harness: tuple[DatabaseService, SpyConnection], case_id: str, case: dict[str, Any]
 ) -> None:
     service, connection = harness
-    sql = expand(case["sql"])
+    sql = expand(case["sql"], TOKENS)
     expected = ErrorCode(case.get("code", "QUERY_REJECTED"))
     before = len(connection.calls)
     with pytest.raises(DomainError) as info:
