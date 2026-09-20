@@ -2,7 +2,7 @@
 
 # sql-mini-mcp
 
-A read-only SQL Server MCP server for coding agents: 6 metadata tools, no unrestricted SQL.
+A read-only, PII-safe SQL Server MCP server for coding agents: schema knowledge and safe queries, with no way to change or leak data.
 
 [![CI](https://github.com/proprock/sql-mini-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/proprock/sql-mini-mcp/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/proprock/sql-mini-mcp)](https://github.com/proprock/sql-mini-mcp/releases)
@@ -23,14 +23,27 @@ A read-only SQL Server MCP server for coding agents: 6 metadata tools, no unrest
 
 General-purpose database MCP servers hand the agent a raw SQL prompt and dozens of tools. This
 server gives a coding agent the schema knowledge it needs to write correct code - servers,
-databases, tables, columns, keys, indexes, stored procedures - and nothing that can change or leak
-data.
+databases, tables, columns, keys, indexes, stored procedures - and, on servers you mark
+`pii_safe`, a way to look at real rows without ever seeing the personal data in them.
 
-- **6 tools, all read-only** - every one is annotated read-only and earns its place in context; see
-  [tools](docs/tools.md).
-<!-- - **Read-only by design. PII-safe by default.** [placeholder] -->
-- **No caller-provided SQL** - the server never executes SQL an agent wrote. Metadata comes from
-  SQLAlchemy Inspector and fixed catalog queries.
+## Read-only by design. PII-safe by default
+
+- **Read-only by construction** - seven tools, all annotated read-only. No tool writes data, and
+  the server never executes SQL an agent wrote: metadata comes from SQLAlchemy Inspector and fixed
+  catalog queries, and `execute_sql` runs only a validated, regenerated `SELECT`.
+- **PII-safe by default** - on a `pii_safe` server, the columns you configure come back as
+  alias-bound, authenticated tokens (`pii:v1:...`), never as plaintext. An agent can still
+  project, count, and filter on them with `=` and `IN` using tokens it was given, so it can follow
+  a record without reading it. Tokens do not work on another server alias or with another key.
+- **Fails closed** - SQL validation is an allowlist. Unknown syntax, unresolved lineage, and
+  unsupported protected-value types are refused, not guessed at. The verification evidence is in
+  the [security model](SECURITY-MODEL.md).
+- **Least access first** - `access_level: metadata` (the default) exposes schema only;
+  `execute_sql` needs an explicit `pii_safe` alias with its own key. Database permissions stay the
+  primary control, so use a least-privilege login.
+
+## Also
+
 - **Your aliases, not your network** - the agent sees only the server aliases you configure. There
   is no network discovery, and the catalog is not published as MCP resources.
 - **Secrets stay out of sight** - connection URLs live in YAML with `${NAME}` placeholders resolved
@@ -38,8 +51,7 @@ data.
 - **Compact, predictable output** - object-rooted results with stable sorting, literal
   case-insensitive name filters, and stored procedure lists that do not expand definitions.
 - **Errors an agent can act on** - an ambiguous name lists the candidate schemas. Errors never
-  contain connection details, credentials, or rows.
-- **Fails closed** - security decisions are allowlists; anything unrecognized is refused.
+  contain connection details, credentials, keys, tokens, or rows.
 - **On PyPI** - `uvx sql-mini-mcp`, no repo clone required.
 
 | Tool | Access | Purpose |
@@ -58,11 +70,12 @@ data.
 
 - [Install](#install)
 - [Configure](#configure)
+- [PII-safe queries](#pii-safe-queries)
 - [Security](#security)
-- [Contributing and security](#contributing-and-security)
+- [Contributing](#contributing)
 
-More detail lives in [`docs/`](docs): the [configuration reference](docs/configuration.md) and
-[what the tools return](docs/tools.md).
+More detail lives in [`docs/`](docs): the [configuration reference](docs/configuration.md),
+[what the tools return](docs/tools.md), and the [security model](SECURITY-MODEL.md).
 
 ## Install
 
@@ -159,18 +172,42 @@ references, plus `SQL_MINI_MCP_CONFIG`. The server speaks MCP over stdio and log
 
 </details>
 
+## PII-safe queries
+
+Mark an alias `access_level: pii_safe`, give it its own key, and list the protected columns:
+
+```yaml
+servers:
+  legacy_prod:
+    engine: sqlserver
+    access_level: pii_safe
+    connection_url: "${LEGACY_PROD_SQL_URL}"
+    pii_key_env: LEGACY_PROD_PII_KEY
+    pii:
+      rules:
+        - database: "*"
+          schema: dbo
+          table: Users
+          columns: [Email, FirstName, LastName]
+```
+
+`execute_sql` then accepts one restricted `SELECT`. Protected cells come back as tokens, and a
+token is accepted only in `=` and `IN` predicates on the same alias. Protection covers the columns
+you list, so list every column that holds personal data. The rule format, key generation, and the
+accepted SQL are in [configuration.md](docs/configuration.md) and [tools.md](docs/tools.md).
+
 ## Security
 
 The MCP caller, SQL input, database metadata, rows, and tokens are untrusted; the operator, the
 process environment, and the database credentials are the trusted boundary. Database permissions
-remain the primary authorization control - this server never widens them. The full model, and how
-to report a vulnerability, are in [SECURITY.md](SECURITY.md).
+remain the primary authorization control - this server never widens them. The full model and its
+verification are in [SECURITY-MODEL.md](SECURITY-MODEL.md). To report a vulnerability,
+use the private channel in [SECURITY.md](SECURITY.md).
 
-## Contributing and security
+## Contributing
 
 Setup, checks, the test commands, the branch and commit conventions, and the release model are in
-[CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities privately as described in
-[SECURITY.md](SECURITY.md). Changes that affect someone running the server are recorded in
+[CONTRIBUTING.md](CONTRIBUTING.md). Changes that affect someone running the server are recorded in
 [CHANGELOG.md](CHANGELOG.md).
 
 ## License

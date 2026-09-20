@@ -26,6 +26,6 @@ Read `ARCHITECTURE.md` before changing public contracts or security boundaries.
   preserved, and only after the user explicitly approves it. Use the existing checkout otherwise.
 - Do not modify `.gitignore` without the user's explicit approval.
 
-See `CONVENTIONS.md`, `SECURITY.md`, `CHECKS.md`, `WORKFLOW.md`, and `CHANGELOG.md` for
+See `CONVENTIONS.md`, `SECURITY-MODEL.md`, `CHECKS.md`, `WORKFLOW.md`, and `CHANGELOG.md` for
 task-specific detail. For a small mechanical documentation-only edit, this file and the target
 document are sufficient.

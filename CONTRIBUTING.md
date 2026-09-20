@@ -14,7 +14,7 @@ to add. Read [Scope](#scope) before opening a pull request.
   change. Read [ARCHITECTURE.md](ARCHITECTURE.md) and [CONVENTIONS.md](CONVENTIONS.md) first, and
   keep published names and semantics unless a deliberate change is required.
 - Security decisions are allowlists: unknown SQL AST nodes and unresolved lineage fail closed. Read
-  [SECURITY.md](SECURITY.md) before touching a security boundary.
+  [SECURITY-MODEL.md](SECURITY-MODEL.md) before touching a security boundary.
 
 Agent-assisted contributions follow the same rules; the repository's [AGENTS.md](AGENTS.md) lists
 them and links the detail documents.
