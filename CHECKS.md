@@ -71,6 +71,20 @@ $env:SQL_MINI_MCP_TEST_SQLSERVER_URL = "mssql+pyodbc://..."
 uv run pytest tests/integration/sqlserver -m integration
 ```
 
+MySQL and MariaDB have their own digest-pinned containers (`compose.mysql.yml`, project
+`sql-mini-mcp-mysql`) and gate. It runs the same live checks against both engines with zero skips
+and cleans its uniquely named databases and logins; changes to `MySqlExtras`, MySQL reflection, or
+PyMySQL connection handling require it, and the milestone live gate requires it in addition to the
+SQL Server run:
+
+```powershell
+.\scripts	est-mysql.ps1
+```
+
+Externally managed servers use `SQL_MINI_MCP_TEST_MYSQL_URL` and
+`SQL_MINI_MCP_TEST_MARIADB_URL` with `uv run pytest tests/integration/mysql -m integration`.
+`.\scripts	est-mysql.ps1 -Reset` removes the containers and volumes.
+
 Explicit local Docker cleanup is separate from the gate and removes the test container and volume:
 
 ```powershell

@@ -22,6 +22,9 @@ associated data so they cannot cross aliases.
 
 1. SQL Server metadata.
 2. SQL Server PII-safe `execute_sql` plus adversarial verification.
-3. MySQL/MariaDB metadata and SQL dialect support.
+3. MySQL/MariaDB metadata (`engine: mysql` or `mariadb`, `mysql+pymysql`), then SQL dialect
+   support. MySQL and MariaDB have no schema level: the database is the catalog and `schema` is
+   always `null`. Until the SQL dialect adapter ships they are `metadata` only, and `pii_safe` is
+   rejected at configuration time.
 
 PostgreSQL, views, HTTP transport, and unrestricted SQL are intentionally deferred.
