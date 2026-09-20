@@ -33,10 +33,15 @@ killed.
 - Hypothesis properties (`security-fast` on every run, `security-deep` before a milestone merge)
   covering forbidden constructs, formatting and alias invariance, lineage, token isolation and
   tamper resistance, and "only validated SQL is ever executed";
+- a MySQL/MariaDB corpus (`tests/security/corpus_mysql`) plus the T-SQL corpus replayed on the
+  `mysql` dialect, and live `execute_sql` tests against MySQL and MariaDB;
 - a live attack fixture that runs the whole corpus against SQL Server with a really writable
   login, compares a snapshot of every object and row before and after, and records every statement
   that reached the driver;
 - mutation testing of `security/*.py` and `config.py`.
+
+MySQL sessions drop `NO_BACKSLASH_ESCAPES` on connect so the generated string escaping means what
+the AST means; the live suite proves this with the mode enabled server-wide.
 
 Comments in the caller's SQL are removed before generation, so no caller-controlled text is
 executed except through the validated AST, and rejection reasons come from a fixed catalog.

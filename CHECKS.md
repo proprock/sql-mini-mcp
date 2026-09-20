@@ -81,6 +81,11 @@ SQL Server run:
 .\scripts\test-mysql.ps1
 ```
 
+`execute_sql` on MySQL and MariaDB is covered by the same script (`test_live_execute_sql.py`):
+tokenized projection, token predicates, injection payloads as binds, `%` and backslash literals
+(also with `NO_BACKSLASH_ESCAPES` set server-wide), native result types, rejected-query canary,
+and per-alias token isolation.
+
 Externally managed servers use `SQL_MINI_MCP_TEST_MYSQL_URL` and
 `SQL_MINI_MCP_TEST_MARIADB_URL` with `uv run pytest tests/integration/mysql -m integration`.
 `.\scripts\test-mysql.ps1 -Reset` removes the containers and volumes.
