@@ -498,3 +498,14 @@ def test_a_detached_token_comparison_is_not_inside_a_where_clause() -> None:
             AnalyzedQuery(exp.select("1"), (), (ref,))
         )
     assert info.value.public_message == f"Query rejected: {Reason.PROTECTED_POSITION.value}."
+
+
+def test_the_allowlist_refuses_a_non_select_root() -> None:
+    for root in (
+        exp.Delete(this=exp.to_table("t")),
+        exp.Union(this=exp.select("1"), expression=exp.select("2")),
+        exp.column("a"),
+    ):
+        with pytest.raises(DomainError) as info:
+            validate_allowlist(root)
+        assert info.value.public_message == f"Query rejected: {Reason.SELECT_ONLY.value}."

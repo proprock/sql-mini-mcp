@@ -7,6 +7,8 @@ categories `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, and `Security`.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-20
+
 ### Changed
 
 - `QUERY_REJECTED` errors from `execute_sql` now come from a fixed catalog of reasons. The wording

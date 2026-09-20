@@ -6,8 +6,8 @@ from sql_mini_mcp import __version__
 
 
 def test_distribution_and_runtime_versions_match_release() -> None:
-    assert __version__ == "1.0.0"
-    assert version("sql-mini-mcp") == "1.0.0"
+    assert __version__ == "1.1.0"
+    assert version("sql-mini-mcp") == "1.1.0"
 
 
 def test_mcp_registry_metadata_matches_the_distribution() -> None:
