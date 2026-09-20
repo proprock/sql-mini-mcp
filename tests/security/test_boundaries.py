@@ -483,3 +483,18 @@ def test_a_protected_column_inside_an_in_list_is_not_a_token_comparison() -> Non
     with pytest.raises(DomainError) as info:
         PiiPolicy("app", PiiConfig(rules=rules), OWN).evaluate(AnalyzedQuery(query, (), (ref,)))
     assert info.value.public_message == f"Query rejected: {Reason.PROTECTED_POSITION.value}."
+
+
+def test_a_detached_token_comparison_is_not_inside_a_where_clause() -> None:
+    from sql_mini_mcp.security.lineage import AnalyzedQuery, ColumnRef, SourceColumn
+
+    column = exp.column("Email", table="u")
+    token = OWN.encrypt("value")
+    exp.EQ(this=column, expression=exp.Literal.string(token))
+    ref = ColumnRef(column, SourceColumn("dbo", "Users", "Email"))
+    rules = [PiiRule(database="*", table="Users", columns=["Email"])]
+    with pytest.raises(DomainError) as info:
+        PiiPolicy("app", PiiConfig(rules=rules), OWN).evaluate(
+            AnalyzedQuery(exp.select("1"), (), (ref,))
+        )
+    assert info.value.public_message == f"Query rejected: {Reason.PROTECTED_POSITION.value}."

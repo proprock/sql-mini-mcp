@@ -231,3 +231,11 @@ def test_non_ascii_values_survive_loading(tmp_path: Path) -> None:
     path.write_bytes(_yaml(url).encode("utf-8"))
     config = load_config(path, {})
     assert config.servers["s"].connection_url.get_secret_value() == url
+
+
+def test_root_level_validation_errors_have_no_location_prefix(tmp_path: Path) -> None:
+    text = _yaml().replace("  s:\n", "  _bad:\n")
+    error = _error(_write(tmp_path, text))
+    assert error.public_message == (
+        "Invalid configuration: Value error, invalid server alias '_bad'"
+    )
