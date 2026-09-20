@@ -10,6 +10,26 @@ uv run ty check
 uv run pytest tests/unit tests/contract -q
 ```
 
+Install the existing commit hooks once after syncing dependencies, then run them before a commit:
+
+```powershell
+uv run prek install
+uv run prek run --all-files
+```
+
+Never bypass a failing hook with `--no-verify`; fix the failure. Hooks do not replace the focused
+test suite.
+
+For a behavior-changing implementation phase, review statement and branch coverage separately:
+
+```powershell
+uv run pytest tests/unit tests/contract --cov=sql_mini_mcp --cov-branch --cov-report=term-missing
+```
+
+Coverage does not replace behavioral assertions. Review the missing-line report, add relevant
+tests or document an intentional exclusion, and report the result. Do not state that any check
+passed unless it was executed.
+
 Validate the example configuration after defining its documented environment variables:
 
 ```powershell
