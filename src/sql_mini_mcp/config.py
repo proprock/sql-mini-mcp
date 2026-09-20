@@ -10,7 +10,7 @@ from typing import Literal
 from urllib.parse import quote
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError, model_validator
 from sqlalchemy.engine import make_url
 
 from sql_mini_mcp.errors import DomainError, ErrorCode
@@ -145,6 +145,14 @@ def _expand_connection_url(template: str, environ: Mapping[str, str]) -> str:
     return expanded
 
 
+def _validation_summary(error: ValidationError) -> str:
+    issues: list[str] = []
+    for issue in error.errors(include_url=False, include_context=False, include_input=False):
+        location = ".".join(str(part) for part in issue["loc"])
+        issues.append(f"{location}: {issue['msg']}" if location else str(issue["msg"]))
+    return "; ".join(issues)
+
+
 def load_config(path: str | Path, environ: Mapping[str, str] | None = None) -> AppConfig:
     env = os.environ if environ is None else environ
     try:
@@ -175,5 +183,12 @@ def load_config(path: str | Path, environ: Mapping[str, str] | None = None) -> A
         return AppConfig.model_validate(raw)
     except DomainError:
         raise
-    except Exception as exc:
+    except ValidationError as exc:
+        raise DomainError(
+            ErrorCode.CONFIG_ERROR,
+            f"Invalid configuration: {_validation_summary(exc)}",
+        ) from exc
+    except (OSError, yaml.YAMLError) as exc:
+        raise DomainError(ErrorCode.CONFIG_ERROR, "Invalid configuration file.") from exc
+    except ValueError as exc:
         raise DomainError(ErrorCode.CONFIG_ERROR, f"Invalid configuration: {exc}") from exc

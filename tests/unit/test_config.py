@@ -158,3 +158,126 @@ servers:
 
     with pytest.raises(DomainError, match="CONFIG_ERROR"):
         load_config(path, {})
+
+
+@pytest.mark.parametrize(
+    ("yaml_text", "environment"),
+    [
+        (
+            """
+version: 2
+servers:
+  legacy:
+    engine: sqlserver
+    connection_url: ${URL}
+""",
+            {"URL": "mssql+pyodbc://u:p@host/master?driver=x"},
+        ),
+        (
+            """
+version: 1
+servers:
+  legacy:
+    engine: sqlserver
+    connection_url: postgresql://u:p@host/database
+""",
+            {},
+        ),
+        (
+            """
+version: 1
+servers:
+  legacy:
+    engine: sqlserver
+    connection_url: ${MISSING_URL}
+""",
+            {},
+        ),
+    ],
+)
+def test_rejects_invalid_version_driver_and_missing_environment(
+    tmp_path: Path, yaml_text: str, environment: dict[str, str]
+) -> None:
+    with pytest.raises(DomainError, match="CONFIG_ERROR"):
+        load_config(_write(tmp_path, yaml_text), environment)
+
+
+def test_rejects_invalid_base64_key(tmp_path: Path) -> None:
+    path = _write(
+        tmp_path,
+        """
+version: 1
+servers:
+  legacy:
+    engine: sqlserver
+    access_level: pii_safe
+    connection_url: ${URL}
+    pii_key_env: KEY
+    pii: {rules: [{database: "*", schema: dbo, table: Users, columns: [Email]}]}
+""",
+    )
+
+    with pytest.raises(DomainError, match="valid base64"):
+        load_config(path, {"URL": "mssql+pyodbc://u:p@host/master?driver=x", "KEY": "!!!"})
+
+
+@pytest.mark.parametrize(
+    "server_fields",
+    [
+        "access_level: pii_safe",
+        "access_level: metadata\n    pii_key_env: KEY",
+    ],
+)
+def test_rejects_incomplete_or_forbidden_pii_configuration(
+    tmp_path: Path, server_fields: str
+) -> None:
+    path = _write(
+        tmp_path,
+        f"""
+version: 1
+servers:
+  legacy:
+    engine: sqlserver
+    connection_url: ${{URL}}
+    {server_fields}
+""",
+    )
+
+    with pytest.raises(DomainError, match="CONFIG_ERROR"):
+        load_config(
+            path,
+            {"URL": "mssql+pyodbc://u:p@host/master?driver=x", "KEY": _key(3)},
+        )
+
+
+def test_validation_error_does_not_echo_secret_extra_field(tmp_path: Path) -> None:
+    secret = "do-not-leak-this-token"
+    path = _write(
+        tmp_path,
+        f"""
+version: 1
+servers:
+  legacy:
+    engine: sqlserver
+    connection_url: mssql+pyodbc://user:password@host/master?driver=x
+    accidental_secret: {secret}
+""",
+    )
+
+    with pytest.raises(DomainError) as raised:
+        load_config(path, {})
+
+    message = str(raised.value)
+    assert "CONFIG_ERROR" in message
+    assert secret not in message
+    assert "password" not in message
+
+
+def test_malformed_yaml_does_not_echo_source_secret(tmp_path: Path) -> None:
+    secret = "yaml-secret-value"
+    path = _write(tmp_path, f"version: 1\nservers: [\n  {secret}\n")
+
+    with pytest.raises(DomainError) as raised:
+        load_config(path, {})
+
+    assert secret not in str(raised.value)
