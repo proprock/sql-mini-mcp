@@ -135,6 +135,36 @@ def test_list_tables_excludes_all_sqlserver_system_schemas(
     assert inspector.requested_schemas == ["dbo", "audit"]
 
 
+class MySqlInspector:
+    def __init__(self) -> None:
+        self.requested_schemas: list[str | None] = []
+
+    def get_schema_names(self) -> list[str]:
+        raise AssertionError("mysql lists only the connected database")
+
+    def get_table_names(self, schema: str | None = None) -> list[str]:
+        self.requested_schemas.append(schema)
+        return ["orders", "users"]
+
+
+def test_list_tables_for_mysql_uses_connected_database_and_null_schema(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Value:
+        dialect = type("Dialect", (), {"name": "mysql"})()
+
+    inspector = MySqlInspector()
+    monkeypatch.setattr("sql_mini_mcp.db.reflection.inspect", lambda _connection: inspector)
+
+    tables = list_tables(cast(Connection, Value()))
+
+    assert [(table.schema_, table.name) for table in tables] == [
+        (None, "orders"),
+        (None, "users"),
+    ]
+    assert inspector.requested_schemas == [None]
+
+
 def test_get_table_definition_normalizes_complete_inspector_payload(
     monkeypatch: pytest.MonkeyPatch, fake_connection: Connection
 ) -> None:

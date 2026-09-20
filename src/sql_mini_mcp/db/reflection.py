@@ -33,6 +33,11 @@ _SQLSERVER_SYSTEM_SCHEMAS = {
 
 def list_tables(connection: Connection) -> list[TableSummary]:
     inspector = inspect(connection)
+    if getattr(connection.dialect, "name", None) == "mysql":
+        # MySQL and MariaDB have no schema level: the connection is bound to one database.
+        return [
+            TableSummary(schema_=None, name=name) for name in inspector.get_table_names(schema=None)
+        ]
     tables: list[TableSummary] = []
     for schema in inspector.get_schema_names():
         if schema.casefold() in _SQLSERVER_SYSTEM_SCHEMAS:
