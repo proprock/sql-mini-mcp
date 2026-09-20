@@ -1,0 +1,90 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build and release (for example, v0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.1.0
+        with:
+          python-version: "3.12"
+
+      - name: uv sync
+        run: uv sync --all-groups --locked
+
+      - name: Build sdist and wheel
+        run: uv build
+
+      - name: Create synthetic configuration
+        run: |
+          cat > /tmp/sql-mini-mcp-config.yaml <<'EOF'
+          version: 1
+          servers:
+            release-metadata:
+              engine: sqlserver
+              connection_url: mssql+pyodbc://user:password@host/master?driver=x
+          EOF
+
+      - name: Verify sdist installs cleanly and validates configuration
+        run: |
+          python -m venv /tmp/verify-sdist
+          /tmp/verify-sdist/bin/pip install --quiet dist/*.tar.gz
+          /tmp/verify-sdist/bin/sql-mini-mcp --config /tmp/sql-mini-mcp-config.yaml --check-config
+
+      - name: Verify wheel installs cleanly and validates configuration
+        run: |
+          python -m venv /tmp/verify-wheel
+          /tmp/verify-wheel/bin/pip install --quiet dist/*.whl
+          /tmp/verify-wheel/bin/sql-mini-mcp --config /tmp/sql-mini-mcp-config.yaml --check-config
+
+      # PyPI publication remains disabled until the package name and Trusted
+      # Publishing configuration are explicitly approved.
+      # - name: Publish to PyPI
+      #   uses: pypa/gh-action-pypi-publish@release/v1
+
+      # MCP Registry publication remains disabled until a reviewed server.json
+      # exists and the corresponding PyPI package has been published.
+      # - name: Install mcp-publisher
+      #   run: |
+      #     curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+      # - name: Authenticate to MCP Registry
+      #   run: ./mcp-publisher login github-oidc
+      # - name: Publish server to MCP Registry
+      #   run: ./mcp-publisher publish
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > release-notes.md <<EOF
+          Milestone 1 release: a minimal, read-only MCP server for SQL Server metadata.
+
+          Six tools: list_servers, list_databases, list_tables, get_table_definition, list_stored_procedures, and get_stored_procedure. Arbitrary SQL execution is intentionally deferred to Milestone 2.
+
+          Install and run directly from this tag:
+          uvx --from git+https://github.com/proprock/sql-mini-mcp@${RELEASE_TAG} sql-mini-mcp
+
+          See README.md for configuration and usage.
+          EOF
+          gh release create "${RELEASE_TAG}" dist/*.whl dist/*.tar.gz \
+            --title "${RELEASE_TAG}" \
+            --notes-file release-notes.md

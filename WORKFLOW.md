@@ -42,3 +42,8 @@ Record each externally observable change under `## [Unreleased]` in `CHANGELOG.m
 change: tool names, arguments, defaults, response schemas, configuration semantics, caller-visible
 errors, and security behavior. Tests, fixtures, CI, refactors, dependency updates, documentation,
 and internal helpers do not earn an entry.
+
+GitHub Actions validates the non-Docker suite and clean package installations. Docker-backed SQL
+Server integration tests remain an opt-in local gate. Release tags create a GitHub Release with the
+checked wheel and source distribution; PyPI and MCP Registry publication require separate explicit
+approval and remain disabled in the release workflow.

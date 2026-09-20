@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      # paths-filter reads pull-request changes through the GitHub API; push
+      # events need a shallow checkout for the commit range.
+      - uses: actions/checkout@v7
+        if: github.event_name != 'pull_request'
+        with:
+          fetch-depth: 2
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - '**'
+              - '!**/*.md'
+
+  quality:
+    name: Quality (Python ${{ matrix.python-version }})
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: uv sync
+        run: uv sync --all-groups --locked
+
+      - name: ruff format --check
+        run: uv run ruff format --check .
+
+      - name: ruff check
+        run: uv run ruff check .
+
+      - name: ty check
+        run: uv run ty check
+
+      # Docker-backed SQL Server integration tests are intentionally excluded
+      # from hosted CI. They remain an opt-in local gate in CHECKS.md.
+      - name: pytest (unit and contract)
+        run: uv run pytest tests/unit tests/contract -q
+
+      - name: pytest --cov (unit and contract)
+        run: uv run pytest tests/unit tests/contract --cov=sql_mini_mcp --cov-branch --cov-report=term-missing
+
+  package:
+    name: Build and verify distribution
+    needs: [changes, quality]
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.1.0
+        with:
+          python-version: "3.12"
+
+      - name: uv sync
+        run: uv sync --all-groups --locked
+
+      - name: Build sdist and wheel
+        run: uv build
+
+      - name: Create synthetic configuration
+        run: |
+          cat > /tmp/sql-mini-mcp-config.yaml <<'EOF'
+          version: 1
+          servers:
+            ci-metadata:
+              engine: sqlserver
+              connection_url: mssql+pyodbc://user:password@host/master?driver=x
+          EOF
+
+      - name: Verify sdist installs cleanly and validates configuration
+        run: |
+          python -m venv /tmp/verify-sdist
+          /tmp/verify-sdist/bin/pip install --quiet dist/*.tar.gz
+          /tmp/verify-sdist/bin/sql-mini-mcp --config /tmp/sql-mini-mcp-config.yaml --check-config
+
+      - name: Verify wheel installs cleanly and validates configuration
+        run: |
+          python -m venv /tmp/verify-wheel
+          /tmp/verify-wheel/bin/pip install --quiet dist/*.whl
+          /tmp/verify-wheel/bin/sql-mini-mcp --config /tmp/sql-mini-mcp-config.yaml --check-config
+
+      - name: Upload distribution artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/

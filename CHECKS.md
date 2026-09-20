@@ -30,6 +30,10 @@ Coverage does not replace behavioral assertions. Review the missing-line report,
 tests or document an intentional exclusion, and report the result. Do not state that any check
 passed unless it was executed.
 
+GitHub Actions runs this fast suite on supported Python versions and builds both distribution
+formats in a clean environment. Docker-backed SQL Server integration tests never run in hosted CI;
+they remain an explicit local or externally managed disposable-database gate.
+
 Validate the example configuration after defining its documented environment variables:
 
 ```powershell
