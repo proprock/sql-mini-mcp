@@ -11,12 +11,13 @@ from typing import Any, ClassVar, cast
 
 from hypothesis import strategies as st
 
-from sql_mini_mcp.config import AppConfig, PiiConfig, PiiRule, RuntimeConfig
-from sql_mini_mcp.db.registry import EngineRegistry
-from sql_mini_mcp.security.pipeline import validate_sql
-from sql_mini_mcp.security.tokens import TokenCodec
-from sql_mini_mcp.security.validated_query import ValidatedQuery
-from sql_mini_mcp.service import DatabaseService
+from sql_safe_mcp.config import AppConfig, PiiConfig, PiiRule, RuntimeConfig
+from sql_safe_mcp.db.registry import EngineRegistry
+from sql_safe_mcp.security.dialect import SQLSERVER, SqlDialect
+from sql_safe_mcp.security.pipeline import validate_sql
+from sql_safe_mcp.security.tokens import TokenCodec
+from sql_safe_mcp.security.validated_query import ValidatedQuery
+from sql_safe_mcp.service import DatabaseService
 
 KEY = bytes(range(32))
 OTHER_KEY = bytes(range(1, 33))
@@ -60,6 +61,7 @@ def validate(sql: str, max_rows: int = 200) -> ValidatedQuery:
         codec=OWN,
         runtime=RUNTIME,
         max_rows=max_rows,
+        dialect=SQLSERVER,
     )
 
 
@@ -267,12 +269,20 @@ def _sql_string(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
-def render(spec: Spec, seed: int, alias_style: int = 0, token_codec: TokenCodec = OWN) -> str:
+def render(
+    spec: Spec,
+    seed: int,
+    alias_style: int = 0,
+    token_codec: TokenCodec = OWN,
+    dialect: SqlDialect = SQLSERVER,
+) -> str:
     """Render a spec with random whitespace, comments, and keyword case (deterministic in seed)."""
     rnd = random.Random(seed)
 
+    line_comment = " --c\n" if dialect.has_schema else rnd.choice([" -- c\n", " #c\n"])
+
     def ws() -> str:
-        return rnd.choice([" ", "  ", "\n", "\t", " /*c*/ ", " --c\n"])
+        return rnd.choice([" ", "  ", "\n", "\t", " /*c*/ ", line_comment])
 
     def kw(word: str) -> str:
         return rnd.choice([word.upper(), word.lower(), word.capitalize()])
@@ -300,7 +310,7 @@ def render(spec: Spec, seed: int, alias_style: int = 0, token_codec: TokenCodec 
 
     names = ["a", "Z_"][alias_style]
     parts = [kw("select"), ws()]
-    if spec.top is not None:
+    if spec.top is not None and dialect.has_schema:
         parts += [kw("top"), ws(), str(spec.top), ws()]
     rendered = []
     for text, alias in spec.projections:
@@ -326,4 +336,6 @@ def render(spec: Spec, seed: int, alias_style: int = 0, token_codec: TokenCodec 
         parts += [ws(), kw("order"), " ", kw("by"), ws()]  # sqlglot rejects ORDER /*c*/ BY
         keys = [col + (f"{ws()}{kw('desc')}" if desc else "") for col, desc in spec.order]
         parts.append(f",{ws()}".join(keys))
+    if spec.top is not None and not dialect.has_schema:
+        parts += [ws(), kw("limit"), ws(), str(spec.top)]
     return "".join(parts)

@@ -2,15 +2,15 @@
 
 Connection topology lives in a YAML file. Secrets live in the process environment and are pulled in
 with `${NAME}` placeholders. A complete example is in
-[sql-mini-mcp.example.yaml](../sql-mini-mcp.example.yaml).
+[sql-safe-mcp.example.yaml](../sql-safe-mcp.example.yaml).
 
 ## Locating and checking the file
 
-The server reads `--config`, else `SQL_MINI_MCP_CONFIG`, else `sql-mini-mcp.yaml` in the working
+The server reads `--config`, else `SQL_SAFE_MCP_CONFIG`, else `sql-safe-mcp.yaml` in the working
 directory. Validate the file and its environment without connecting to any database:
 
 ```bash
-sql-mini-mcp --check-config
+sql-safe-mcp --check-config
 ```
 
 Errors name the missing or invalid setting without printing a URL, key, or secret.
@@ -29,9 +29,9 @@ servers:
 | Key | Meaning |
 |---|---|
 | alias (the map key) | Letters, digits, `.`, `_`, `-`; starts with a letter or digit. This is what the agent passes as `server`. |
-| `engine` | `sqlserver`. MySQL/MariaDB is rejected until it is supported. |
+| `engine` | `sqlserver` (`mssql+pyodbc`), `mysql` or `mariadb` (both `mysql+pymysql`). MySQL and MariaDB have no schema level: `schema` is always `null`, and a `pii` rule for them must not set `schema` (the table is matched by `database` and `table`). |
 | `access_level` | `metadata` (default) or `pii_safe`. |
-| `connection_url` | A SQLAlchemy `mssql+pyodbc://` URL. Treated as a secret. |
+| `connection_url` | A SQLAlchemy `mssql+pyodbc://` (SQL Server) or `mysql+pymysql://` (MySQL, MariaDB) URL. Treated as a secret. |
 | `pii_key_env`, `pii` | Only for `pii_safe`; see below. |
 
 ### Placeholders

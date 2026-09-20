@@ -9,15 +9,15 @@ from pydantic import SecretStr
 from sqlalchemy.exc import DBAPIError, OperationalError, ProgrammingError
 from sqlalchemy.exc import TimeoutError as SqlAlchemyTimeoutError
 
-from sql_mini_mcp.config import AppConfig, RuntimeConfig, ServerConfig
-from sql_mini_mcp.db.registry import EngineRegistry
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.models import (
+from sql_safe_mcp.config import AppConfig, RuntimeConfig, ServerConfig
+from sql_safe_mcp.db.registry import EngineRegistry
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.models import (
     StoredProcedureDefinition,
     StoredProcedureSummary,
     TableSummary,
 )
-from sql_mini_mcp.service import DatabaseService
+from sql_safe_mcp.service import DatabaseService
 
 
 class StubRegistry:
@@ -163,6 +163,28 @@ def test_get_stored_procedure_handles_ambiguity_hidden_and_oversized_definition(
         ),
         (SqlAlchemyTimeoutError("pool timeout with secret"), ErrorCode.TIMEOUT),
         (
+            OperationalError(
+                "SELECT secret",
+                {"password": "hidden"},
+                Exception(2013, "Lost connection to MySQL server during query (timed out)"),
+            ),
+            ErrorCode.TIMEOUT,
+        ),
+        (
+            OperationalError(
+                "SELECT secret",
+                {"password": "hidden"},
+                Exception(1044, "Access denied for user 'u'@'%' to database 'secret'"),
+            ),
+            ErrorCode.ACCESS_DENIED,
+        ),
+        (
+            OperationalError(
+                "SELECT secret", {"password": "hidden"}, Exception(1049, "Unknown database 'x'")
+            ),
+            ErrorCode.CONNECTION_FAILED,
+        ),
+        (
             DBAPIError(
                 "SELECT secret", {"password": "hidden"}, Exception("42000 permission denied")
             ),
@@ -211,10 +233,24 @@ def test_unexpected_failure_logs_only_generic_context_and_correlation_id(
         assert raised.value.code is ErrorCode.DATABASE_ERROR
         assert raised.value.correlation_id is not None
 
-    with caplog.at_level(logging.ERROR, logger="sql_mini_mcp.service"):
+    with caplog.at_level(logging.ERROR, logger="sql_safe_mcp.service"):
         asyncio.run(scenario())
 
     captured = caplog.text
     assert "Unexpected database operation failure" in captured
     assert "SELECT secret" not in captured
     assert "password" not in captured
+
+
+def test_ambiguous_table_candidates_omit_null_schema() -> None:
+    tables = [
+        TableSummary(schema_=None, name="Users"),
+        TableSummary(schema_=None, name="users"),
+    ]
+
+    with pytest.raises(DomainError) as raised:
+        DatabaseService._resolve_table(tables, "users", None)
+
+    assert raised.value.code is ErrorCode.AMBIGUOUS_OBJECT
+    assert "None" not in str(raised.value)
+    assert "Users" in str(raised.value)

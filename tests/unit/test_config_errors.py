@@ -9,8 +9,8 @@ from typing import cast
 import pytest
 from pydantic import ValidationError
 
-from sql_mini_mcp.config import AppConfig, load_config
-from sql_mini_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.config import AppConfig, load_config
+from sql_safe_mcp.errors import DomainError, ErrorCode
 
 URL = "mssql+pyodbc://u:p@sql/master?driver=x"
 

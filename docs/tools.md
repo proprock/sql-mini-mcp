@@ -39,10 +39,11 @@ No tool writes data or discovers servers, and the catalog is not published as MC
 Available only for `access_level: pii_safe` servers; a `metadata` server returns
 `ACCESS_LEVEL_DENIED`. It accepts one `SELECT` from a small allowlist: local base tables, direct
 columns and aliases, literals, `COUNT(*)` without `GROUP BY`, `INNER`/`LEFT JOIN ... ON`, `WHERE`
-with `AND`/`OR`, comparisons, `IN` and `IS NULL`, `ORDER BY` on a direct column, and `TOP`.
+with `AND`/`OR`, comparisons, `IN` and `IS NULL`, `ORDER BY` on a direct column, and `TOP` (SQL Server) or `LIMIT n` (MySQL/MariaDB; no offset).
 Everything else is rejected with `QUERY_REJECTED`: CTEs, subqueries, unions, `DISTINCT`, `GROUP BY`,
 functions, `CASE`, `CAST`, hints, `SELECT INTO`, variables, temporary tables, cross-database
-names, and any syntax not listed.
+names, and any syntax not listed. On MySQL and MariaDB a `db.table` name is a cross-database
+reference and is rejected, and `TIME` results beyond 24 hours are not supported.
 
 - `max_rows` defaults to `default_max_rows` and may not exceed `hard_max_rows`. `truncated` is true
   when more rows existed.

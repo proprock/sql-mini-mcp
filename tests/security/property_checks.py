@@ -27,11 +27,11 @@ from support import (
     validate,
 )
 
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.models import SqlResult
-from sql_mini_mcp.security.executor import execute_validated
-from sql_mini_mcp.security.parser import ParserLimits, parse_select, validate_allowlist
-from sql_mini_mcp.security.tokens import PREFIX, TokenCodec
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.models import SqlResult
+from sql_safe_mcp.security.executor import execute_validated
+from sql_safe_mcp.security.parser import ParserLimits, parse_select, validate_allowlist
+from sql_safe_mcp.security.tokens import PREFIX, TokenCodec
 
 SPY = SpyConnection()
 SERVICE = spy_service(SPY)

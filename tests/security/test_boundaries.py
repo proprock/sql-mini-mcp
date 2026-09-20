@@ -13,35 +13,36 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from sqlglot import exp
 from support import KEY, OWN, RUNTIME, Catalog, SpyConnection, SpyResult, validate
 
-import sql_mini_mcp.security.schema as schema_module
-import sql_mini_mcp.security.validated_query as vq_module
-from sql_mini_mcp.config import PiiConfig, PiiRule
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.security.executor import execute_validated
-from sql_mini_mcp.security.lineage import _cross_check, analyze_query
-from sql_mini_mcp.security.parser import (
+import sql_safe_mcp.security.schema as schema_module
+import sql_safe_mcp.security.validated_query as vq_module
+from sql_safe_mcp.config import PiiConfig, PiiRule
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.security.dialect import SQLSERVER
+from sql_safe_mcp.security.executor import execute_validated
+from sql_safe_mcp.security.lineage import _cross_check, analyze_query
+from sql_safe_mcp.security.parser import (
     ParserLimits,
     parse_select,
     strip_comments,
     validate_allowlist,
 )
-from sql_mini_mcp.security.policy import PiiPolicy, PolicyDecision
-from sql_mini_mcp.security.reasons import Reason
-from sql_mini_mcp.security.schema import (
+from sql_safe_mcp.security.policy import PiiPolicy, PolicyDecision
+from sql_safe_mcp.security.reasons import Reason
+from sql_safe_mcp.security.schema import (
     ReflectedCatalog,
     SchemaCache,
     TableSchema,
     resolve_tables,
 )
-from sql_mini_mcp.security.tokens import TokenCodec
-from sql_mini_mcp.security.validated_query import issue_validated_query
+from sql_safe_mcp.security.tokens import TokenCodec
+from sql_safe_mcp.security.validated_query import issue_validated_query
 
 LIMITS = ParserLimits.from_runtime(RUNTIME)
 
 
 def analyzed(sql: str):
     query = parse_select(sql, LIMITS)
-    return analyze_query(query, resolve_tables(query, Catalog()), LIMITS)
+    return analyze_query(query, resolve_tables(query, Catalog()), LIMITS, SQLSERVER)
 
 
 # --- validated query ---------------------------------------------------------------------------
@@ -274,20 +275,20 @@ ORDERS = TableSchema("dbo", "Orders", ("Id", "UserId"))
 
 def test_the_cross_check_accepts_a_fully_resolved_query() -> None:
     query = parse_select("SELECT [Users].[Id] FROM [dbo].[Users]", LIMITS)
-    _cross_check(query, _tables(USERS))
+    _cross_check(query, _tables(USERS), SQLSERVER)
 
 
 def test_the_cross_check_rejects_an_unknown_column() -> None:
     query = parse_select("SELECT [Users].[Nope] FROM [dbo].[Users]", LIMITS)
     with pytest.raises(DomainError) as info:
-        _cross_check(query, _tables(USERS))
+        _cross_check(query, _tables(USERS), SQLSERVER)
     assert info.value.public_message == f"Query rejected: {Reason.QUALIFY_FAILED.value}."
 
 
 def test_the_cross_check_rejects_a_column_with_the_wrong_case() -> None:
     query = parse_select("SELECT [Users].[id] FROM [dbo].[Users]", LIMITS)
     with pytest.raises(DomainError):
-        _cross_check(query, _tables(USERS))
+        _cross_check(query, _tables(USERS), SQLSERVER)
 
 
 def test_the_cross_check_rejects_an_ambiguous_unqualified_column() -> None:
@@ -296,7 +297,7 @@ def test_the_cross_check_rejects_an_ambiguous_unqualified_column() -> None:
         LIMITS,
     )
     with pytest.raises(DomainError):
-        _cross_check(query, _tables(USERS, ORDERS))
+        _cross_check(query, _tables(USERS, ORDERS), SQLSERVER)
 
 
 # --- policy ------------------------------------------------------------------------------------
@@ -388,12 +389,12 @@ def test_a_projection_without_a_from_clause_is_accepted() -> None:
 def test_table_resolution_must_match_the_query_tables() -> None:
     query = parse_select("SELECT Id FROM Users", LIMITS)
     with pytest.raises(DomainError) as info:
-        analyze_query(query, (), LIMITS)
+        analyze_query(query, (), LIMITS, SQLSERVER)
     assert info.value.public_message == f"Query rejected: {Reason.TABLE_RESOLUTION_MISMATCH.value}."
 
 
 def test_a_detached_protected_column_is_not_in_a_where_clause() -> None:
-    from sql_mini_mcp.security.lineage import AnalyzedQuery, ColumnRef, SourceColumn
+    from sql_safe_mcp.security.lineage import AnalyzedQuery, ColumnRef, SourceColumn
 
     detached = exp.column("Email")
     ref = ColumnRef(detached, SourceColumn("dbo", "Users", "Email"))
@@ -447,7 +448,7 @@ def test_generated_sql_is_exact_and_fully_quoted(sql: str, expected: str) -> Non
 def test_a_none_schema_from_reflection_becomes_an_empty_schema(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from sql_mini_mcp.models import TableSummary
+    from sql_safe_mcp.models import TableSummary
 
     monkeypatch.setattr(
         schema_module, "reflect_tables", lambda _connection: [TableSummary(schema=None, name="T")]
@@ -464,14 +465,14 @@ def test_a_none_schema_from_reflection_becomes_an_empty_schema(
 def test_a_bare_protected_column_used_as_a_predicate_is_rejected() -> None:
     rules = [PiiRule(database="*", schema="dbo", table="Users", columns=["Name"])]
     query = parse_select("SELECT Id FROM Users WHERE Name", LIMITS)
-    result = analyze_query(query, resolve_tables(query, Catalog()), LIMITS)
+    result = analyze_query(query, resolve_tables(query, Catalog()), LIMITS, SQLSERVER)
     with pytest.raises(DomainError) as info:
         PiiPolicy("app", PiiConfig(rules=rules), OWN).evaluate(result)
     assert info.value.public_message == f"Query rejected: {Reason.PROTECTED_POSITION.value}."
 
 
 def test_a_protected_column_inside_an_in_list_is_not_a_token_comparison() -> None:
-    from sql_mini_mcp.security.lineage import AnalyzedQuery, ColumnRef, SourceColumn
+    from sql_safe_mcp.security.lineage import AnalyzedQuery, ColumnRef, SourceColumn
 
     protected = exp.column("Email", table="u")
     other = exp.column("Id", table="u")
@@ -486,7 +487,7 @@ def test_a_protected_column_inside_an_in_list_is_not_a_token_comparison() -> Non
 
 
 def test_a_detached_token_comparison_is_not_inside_a_where_clause() -> None:
-    from sql_mini_mcp.security.lineage import AnalyzedQuery, ColumnRef, SourceColumn
+    from sql_safe_mcp.security.lineage import AnalyzedQuery, ColumnRef, SourceColumn
 
     column = exp.column("Email", table="u")
     token = OWN.encrypt("value")

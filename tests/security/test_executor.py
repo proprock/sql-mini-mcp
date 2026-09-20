@@ -1,18 +1,19 @@
 import json
 from collections.abc import Sequence
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any, ClassVar, cast
 from uuid import UUID
 
 import pytest
 
-from sql_mini_mcp.config import PiiConfig, PiiRule, RuntimeConfig
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.security.executor import execute_validated
-from sql_mini_mcp.security.pipeline import validate_sql
-from sql_mini_mcp.security.tokens import TokenCodec
-from sql_mini_mcp.security.validated_query import ValidatedQuery
+from sql_safe_mcp.config import PiiConfig, PiiRule, RuntimeConfig
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.security.dialect import SQLSERVER
+from sql_safe_mcp.security.executor import execute_validated
+from sql_safe_mcp.security.pipeline import validate_sql
+from sql_safe_mcp.security.tokens import TokenCodec
+from sql_safe_mcp.security.validated_query import ValidatedQuery
 
 KEY = bytes(range(32))
 CODEC = TokenCodec("srv", KEY)
@@ -74,6 +75,7 @@ def build(sql: str, max_rows: int = 3) -> ValidatedQuery:
         codec=CODEC,
         runtime=RUNTIME,
         max_rows=max_rows,
+        dialect=SQLSERVER,
     )
 
 
@@ -182,6 +184,9 @@ def test_column_count_mismatch_is_an_error() -> None:
         (Decimal("1.50"), "1.50", "decimal"),
         (date(2024, 1, 2), "2024-01-02", "date"),
         (time(1, 2, 3), "01:02:03", "time"),
+        (timedelta(hours=1, minutes=2, seconds=3), "01:02:03", "time"),
+        (timedelta(0), "00:00:00", "time"),
+        (timedelta(seconds=1, microseconds=5), "00:00:01.000005", "time"),
         (datetime(2024, 1, 2, 3, 4, 5), "2024-01-02T03:04:05", "datetime"),
         (datetime(2024, 1, 2, tzinfo=UTC), "2024-01-02T00:00:00+00:00", "datetime"),
         (UUID(int=1), "00000000-0000-0000-0000-000000000001", "uuid"),
@@ -203,7 +208,19 @@ def test_all_null_column_defaults_to_json() -> None:
 
 
 @pytest.mark.parametrize(
-    "value", [object(), float("nan"), float("inf"), Decimal("NaN"), complex(1, 1), [1], {"a": 1}]
+    "value",
+    [
+        object(),
+        float("nan"),
+        float("inf"),
+        Decimal("NaN"),
+        complex(1, 1),
+        [1],
+        {"a": 1},
+        timedelta(days=1),
+        timedelta(seconds=-1),
+        {"a", "b"},
+    ],
 )
 def test_unsupported_unprotected_values_are_a_controlled_error(value: Any) -> None:
     with pytest.raises(DomainError) as info:

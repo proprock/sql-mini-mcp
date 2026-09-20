@@ -22,10 +22,10 @@ from pydantic import SecretStr
 from sqlalchemy import Connection, Engine, create_engine, event, text
 from sqlalchemy.engine import URL, make_url
 
-from sql_mini_mcp.config import AppConfig, PiiConfig, PiiRule, RuntimeConfig, ServerConfig
-from sql_mini_mcp.db import registry as registry_module
-from sql_mini_mcp.db.registry import EngineRegistry
-from sql_mini_mcp.service import DatabaseService
+from sql_safe_mcp.config import AppConfig, PiiConfig, PiiRule, RuntimeConfig, ServerConfig
+from sql_safe_mcp.db import registry as registry_module
+from sql_safe_mcp.db.registry import EngineRegistry
+from sql_safe_mcp.service import DatabaseService
 
 USERS = [
     ("marker-email-1", "marker-phone-1", "Alice"),
@@ -181,9 +181,9 @@ def _pii_server(url: str, key: bytes, key_env: str, databases: tuple[str, str]) 
 
 @pytest.fixture(scope="module")
 def attack_lab() -> Iterator[AttackLab]:
-    raw_url = os.environ.get("SQL_MINI_MCP_TEST_SQLSERVER_URL")
+    raw_url = os.environ.get("SQL_SAFE_MCP_TEST_SQLSERVER_URL")
     if not raw_url:
-        pytest.skip("SQL_MINI_MCP_TEST_SQLSERVER_URL is not configured")
+        pytest.skip("SQL_SAFE_MCP_TEST_SQLSERVER_URL is not configured")
 
     suffix = uuid4().hex[:10]
     databases = (f"SmmAttackA_{suffix}", f"SmmAttackB_{suffix}")

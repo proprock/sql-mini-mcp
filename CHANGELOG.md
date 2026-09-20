@@ -7,6 +7,37 @@ categories `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, and `Security`.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-20
+
+### Added
+
+- MySQL and MariaDB support: `engine: mysql` or `engine: mariadb` with a `mysql+pymysql://` URL.
+  All seven tools work on them. MySQL and MariaDB have no schema level, so `schema` is always
+  `null` in responses and a `db.table` name is rejected as a cross-database reference.
+- `execute_sql` and `pii_safe` on MySQL and MariaDB, with `LIMIT` in place of `TOP`. A `pii` rule
+  for these engines must not set `schema`. `TIME` results are returned as `time` values within a
+  day; longer values fail with `DATABASE_ERROR`.
+- Stored procedures on MySQL and MariaDB report the body from `information_schema.ROUTINES`, which
+  is `null` when the login may not see it.
+- `COUNT(*)` is accepted on the `mysql` dialect.
+
+### Changed
+
+- **Breaking:** the project is renamed from `sql-mini-mcp` to `sql-safe-mcp`. The package, the
+  Python module (`sql_safe_mcp`), the command (`sql-safe-mcp`), the example configuration file, and
+  every environment variable (`SQL_MINI_MCP_CONFIG` is now `SQL_SAFE_MCP_CONFIG`) change; the old
+  names are not kept as aliases. The `sql-mini-mcp` package on PyPI becomes a deprecated shim that
+  depends on `sql-safe-mcp`.
+- The `QUERY_REJECTED` reason for a non-integer row limit now reads
+  `TOP/LIMIT must be a non-negative integer literal`.
+
+### Security
+
+- MySQL and MariaDB sessions drop `NO_BACKSLASH_ESCAPES`, so the string escaping in the generated
+  SQL always means what the validated query means, even if the server enables that mode.
+- The validation pipeline takes its SQL dialect only from the trusted server configuration and
+  requires it explicitly; policy, tokens, and the validated query are shared by every engine.
+
 ## [1.1.0] - 2026-09-20
 
 ### Changed

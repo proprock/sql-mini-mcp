@@ -16,7 +16,7 @@ try {
         throw "Docker daemon is not ready. Start Docker Desktop and retry."
     }
 
-    $env:SQL_MINI_MCP_DOCKER_SA_PASSWORD = "SqlMiniMcpProbe!A1"
+    $env:SQL_SAFE_MCP_DOCKER_SA_PASSWORD = "SqlSafeMcpProbe!A1"
     if ($Reset) {
         docker compose -f $composeFile down --volumes --remove-orphans
         exit $LASTEXITCODE
@@ -36,9 +36,9 @@ try {
         $password = $passwordEntry.Substring("MSSQL_SA_PASSWORD=".Length)
     }
     else {
-        $password = "SqlMiniMcp!A1" + [Guid]::NewGuid().ToString("N")
+        $password = "SqlSafeMcp!A1" + [Guid]::NewGuid().ToString("N")
     }
-    $env:SQL_MINI_MCP_DOCKER_SA_PASSWORD = $password
+    $env:SQL_SAFE_MCP_DOCKER_SA_PASSWORD = $password
 
     docker compose -f $composeFile up -d --wait
     if ($LASTEXITCODE -ne 0) {
@@ -51,14 +51,14 @@ try {
     }
     $port = ($portLine.Trim() -split ":")[-1]
     $encodedPassword = [Uri]::EscapeDataString($password)
-    $env:SQL_MINI_MCP_TEST_SQLSERVER_URL = (
+    $env:SQL_SAFE_MCP_TEST_SQLSERVER_URL = (
         "mssql+pyodbc://sa:{0}@127.0.0.1:{1}/master" +
         "?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=yes"
     ) -f $encodedPassword, $port
 
-    $auditDir = Join-Path ([IO.Path]::GetTempPath()) "sql-mini-mcp-audit"
+    $auditDir = Join-Path ([IO.Path]::GetTempPath()) "sql-safe-mcp-audit"
     Remove-Item $auditDir -Recurse -Force -ErrorAction SilentlyContinue
-    $env:SQL_MINI_MCP_AUDIT_DIR = $auditDir
+    $env:SQL_SAFE_MCP_AUDIT_DIR = $auditDir
 
     uv run pytest tests/integration/sqlserver -m integration -v @PytestArgs
     $exitCode = $LASTEXITCODE
@@ -67,9 +67,9 @@ try {
     }
 }
 finally {
-    Remove-Item Env:SQL_MINI_MCP_TEST_SQLSERVER_URL -ErrorAction SilentlyContinue
-    Remove-Item Env:SQL_MINI_MCP_AUDIT_DIR -ErrorAction SilentlyContinue
-    Remove-Item Env:SQL_MINI_MCP_DOCKER_SA_PASSWORD -ErrorAction SilentlyContinue
+    Remove-Item Env:SQL_SAFE_MCP_TEST_SQLSERVER_URL -ErrorAction SilentlyContinue
+    Remove-Item Env:SQL_SAFE_MCP_AUDIT_DIR -ErrorAction SilentlyContinue
+    Remove-Item Env:SQL_SAFE_MCP_DOCKER_SA_PASSWORD -ErrorAction SilentlyContinue
 }
 
 exit $exitCode

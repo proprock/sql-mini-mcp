@@ -1,4 +1,4 @@
-from sql_mini_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.errors import DomainError, ErrorCode
 
 
 def test_domain_error_has_stable_public_format() -> None:

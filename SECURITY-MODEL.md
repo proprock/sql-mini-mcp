@@ -1,6 +1,6 @@
 # Security model
 
-How sql-mini-mcp protects data, and the evidence behind it. To report a vulnerability, see
+How sql-safe-mcp protects data, and the evidence behind it. To report a vulnerability, see
 [SECURITY.md](SECURITY.md).
 
 ## Trust boundary
@@ -33,22 +33,28 @@ killed.
 - Hypothesis properties (`security-fast` on every run, `security-deep` before a milestone merge)
   covering forbidden constructs, formatting and alias invariance, lineage, token isolation and
   tamper resistance, and "only validated SQL is ever executed";
+- a MySQL/MariaDB corpus (`tests/security/corpus_mysql`) plus the T-SQL corpus replayed on the
+  `mysql` dialect, and live `execute_sql` tests against MySQL and MariaDB;
 - a live attack fixture that runs the whole corpus against SQL Server with a really writable
   login, compares a snapshot of every object and row before and after, and records every statement
   that reached the driver;
 - mutation testing of `security/*.py` and `config.py`.
+
+MySQL sessions drop `NO_BACKSLASH_ESCAPES` on connect so the generated string escaping means what
+the AST means; the live suite proves this with the mode enabled server-wide.
 
 Comments in the caller's SQL are removed before generation, so no caller-controlled text is
 executed except through the validated AST, and rejection reasons come from a fixed catalog.
 
 ### Equivalent mutants
 
-The last complete mutation run (Linux, mutmut 3.8, 1410 mutants) killed 1369 mutants, with no
-timeouts and no unclassified survivors. The 41 survivors are equivalent to the original code:
+The last complete mutation run (Linux, mutmut 3.8, 1454 mutants, after the mysql dialect work)
+killed 1413 mutants, with no timeouts and no unclassified survivors. The 41 survivors are
+equivalent to the original code:
 
 | Location | Mutation | Why it cannot change behavior |
 |---|---|---|
-| `validated_query._to_qmark` (2) | `replace(marker, "?", 1)` with the count omitted or 2 | Markers are unique random strings and the guard `len(found) == len(markers) and set(found) == set(markers)` proves each occurs exactly once. |
+| `validated_query._to_positional` (2) | `replace(marker, dialect.bind_marker, 1)` with the count omitted or 2 | Markers are unique random strings and the guard `len(found) == len(markers) and set(found) == set(markers)` proves each occurs exactly once. |
 | `executor._encode` (1) | `.decode("ascii")` as `"ASCII"` | Python codec names are case-insensitive aliases. |
 | `tokens._reject_constant` (4) | message text | The `ValueError` is raised inside `json.loads` and swallowed by `TokenCodec.decrypt`, which always raises the fixed `INVALID_PII_TOKEN` error; the text is never observed. |
 | `tokens._encode_float` (6) | `or` as `and`, `float("INF")`, `float("-INF")`, three message texts | `json.dumps(..., allow_nan=False)` rejects NaN and infinities right after, and `encrypt` maps that `ValueError` to the same unsupported-value error. `float("INF") == float("inf")`. |

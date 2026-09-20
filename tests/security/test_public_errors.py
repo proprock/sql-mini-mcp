@@ -13,14 +13,14 @@ from typing import Any
 import pytest
 from support import ALIAS, OWN, RUNTIME, SpyConnection, SpyResult, validate
 
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.security.executor import execute_validated
-from sql_mini_mcp.security.parser import REJECT_HINT, reject
-from sql_mini_mcp.security.reasons import Reason
-from sql_mini_mcp.security.tokens import TokenCodec, TokenKeyRegistry
-from sql_mini_mcp.security.validated_query import ValidatedQuery
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.security.executor import execute_validated
+from sql_safe_mcp.security.parser import REJECT_HINT, reject
+from sql_safe_mcp.security.reasons import Reason
+from sql_safe_mcp.security.tokens import TokenCodec, TokenKeyRegistry
+from sql_safe_mcp.security.validated_query import ValidatedQuery
 
-SRC = Path(__file__).parents[2] / "src" / "sql_mini_mcp" / "security"
+SRC = Path(__file__).parents[2] / "src" / "sql_safe_mcp" / "security"
 
 
 @contextmanager

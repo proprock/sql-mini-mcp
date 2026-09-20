@@ -1,6 +1,6 @@
 [project]
-name = "sql-mini-mcp"
-version = "1.1.0"
+name = "sql-safe-mcp"
+version = "1.2.0"
 description = "Minimal, read-only, PII-safe MCP server for SQL databases."
 readme = "README.md"
 requires-python = ">=3.12,<3.15"
@@ -10,6 +10,7 @@ dependencies = [
     "cryptography>=46.0.7,<47",
     "mcp>=2,<3",
     "pydantic>=2.10,<3",
+    "pymysql>=1.2.3",
     "pyodbc>=5.2,<6",
     "pyyaml>=6,<7",
     "sqlalchemy>=2.0,<3",
@@ -17,7 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
-sql-mini-mcp = "sql_mini_mcp.__main__:main"
+sql-safe-mcp = "sql_safe_mcp.__main__:main"
 
 [dependency-groups]
 dev = [
@@ -35,7 +36,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/sql_mini_mcp"]
+packages = ["src/sql_safe_mcp"]
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -44,21 +45,21 @@ include = [
     "/README.md",
     "/pyproject.toml",
     "/server.json",
-    "/sql-mini-mcp.example.yaml",
+    "/sql-safe-mcp.example.yaml",
     "/src",
 ]
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers"
 testpaths = ["tests"]
-pythonpath = ["tests/security"]
+pythonpath = ["tests/security", "tests/integration/sqlserver", "tests/integration/mysql"]
 markers = [
     "integration: requires a live database",
     "deep: expensive security verification",
 ]
 
 [tool.mutmut]
-source_paths = ["src/sql_mini_mcp"]
+source_paths = ["src/sql_safe_mcp"]
 also_copy = ["server.json", "README.md"]
 only_mutate = ["*security/*.py", "*config.py"]
 mutate_only_covered_lines = true
@@ -69,7 +70,7 @@ timeout_constant = 5.0
 
 [tool.coverage.run]
 branch = true
-source = ["sql_mini_mcp"]
+source = ["sql_safe_mcp"]
 
 [tool.ruff]
 line-length = 100
@@ -85,4 +86,4 @@ quote-style = "double"
 include = ["src", "tests"]
 
 [tool.ty.environment]
-extra-paths = ["tests/security"]
+extra-paths = ["tests/security", "tests/integration/sqlserver", "tests/integration/mysql"]

@@ -9,11 +9,11 @@ from typing import Any, ClassVar, cast
 import pytest
 from sqlalchemy.exc import DBAPIError
 
-from sql_mini_mcp.config import AppConfig
-from sql_mini_mcp.db.registry import EngineRegistry
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.security.tokens import TokenCodec
-from sql_mini_mcp.service import DatabaseService
+from sql_safe_mcp.config import AppConfig
+from sql_safe_mcp.db.registry import EngineRegistry
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.security.tokens import TokenCodec
+from sql_safe_mcp.service import DatabaseService
 
 KEY = bytes(range(32))
 OTHER_KEY = bytes(range(1, 33))

@@ -4,9 +4,9 @@ import pytest
 import sqlalchemy as sa
 from sqlglot import exp
 
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.security.parser import ParserLimits, parse_select
-from sql_mini_mcp.security.schema import (
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.security.parser import ParserLimits, parse_select
+from sql_safe_mcp.security.schema import (
     ReflectedCatalog,
     SchemaCache,
     TableSchema,

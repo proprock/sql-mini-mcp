@@ -12,8 +12,8 @@ from mcp_types import TextContent
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 
-from sql_mini_mcp.mcp_server import create_server
-from sql_mini_mcp.security.tokens import TokenCodec
+from sql_safe_mcp.mcp_server import create_server
+from sql_safe_mcp.security.tokens import TokenCodec
 
 pytestmark = pytest.mark.integration
 

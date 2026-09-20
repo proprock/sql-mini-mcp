@@ -7,12 +7,13 @@ from typing import ClassVar, cast
 import pytest
 from sqlglot import exp
 
-from sql_mini_mcp.config import PiiConfig, PiiRule, RuntimeConfig
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.security.parser import ParserLimits, parse_select, validate_allowlist
-from sql_mini_mcp.security.pipeline import validate_sql
-from sql_mini_mcp.security.tokens import TokenCodec
-from sql_mini_mcp.security.validated_query import ValidatedQuery
+from sql_safe_mcp.config import PiiConfig, PiiRule, RuntimeConfig
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.security.dialect import SQLSERVER
+from sql_safe_mcp.security.parser import ParserLimits, parse_select, validate_allowlist
+from sql_safe_mcp.security.pipeline import validate_sql
+from sql_safe_mcp.security.tokens import TokenCodec
+from sql_safe_mcp.security.validated_query import ValidatedQuery
 
 KEY = bytes(range(32))
 CODEC = TokenCodec("srv", KEY)
@@ -51,6 +52,7 @@ def build(sql: str, max_rows: int = 200, catalog: Catalog | None = None) -> Vali
         codec=CODEC,
         runtime=RUNTIME,
         max_rows=max_rows,
+        dialect=SQLSERVER,
     )
 
 

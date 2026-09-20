@@ -5,7 +5,7 @@ from typing import Any, cast
 import pytest
 from sqlalchemy import Connection
 
-from sql_mini_mcp.db.reflection import get_table_definition, list_tables
+from sql_safe_mcp.db.reflection import get_table_definition, list_tables
 
 
 class FakeType:
@@ -123,7 +123,7 @@ def test_list_tables_excludes_all_sqlserver_system_schemas(
     monkeypatch: pytest.MonkeyPatch, fake_connection: Connection
 ) -> None:
     inspector = FakeInspector()
-    monkeypatch.setattr("sql_mini_mcp.db.reflection.inspect", lambda _connection: inspector)
+    monkeypatch.setattr("sql_safe_mcp.db.reflection.inspect", lambda _connection: inspector)
 
     tables = list_tables(fake_connection)
 
@@ -135,10 +135,40 @@ def test_list_tables_excludes_all_sqlserver_system_schemas(
     assert inspector.requested_schemas == ["dbo", "audit"]
 
 
+class MySqlInspector:
+    def __init__(self) -> None:
+        self.requested_schemas: list[str | None] = []
+
+    def get_schema_names(self) -> list[str]:
+        raise AssertionError("mysql lists only the connected database")
+
+    def get_table_names(self, schema: str | None = None) -> list[str]:
+        self.requested_schemas.append(schema)
+        return ["orders", "users"]
+
+
+def test_list_tables_for_mysql_uses_connected_database_and_null_schema(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Value:
+        dialect = type("Dialect", (), {"name": "mysql"})()
+
+    inspector = MySqlInspector()
+    monkeypatch.setattr("sql_safe_mcp.db.reflection.inspect", lambda _connection: inspector)
+
+    tables = list_tables(cast(Connection, Value()))
+
+    assert [(table.schema_, table.name) for table in tables] == [
+        (None, "orders"),
+        (None, "users"),
+    ]
+    assert inspector.requested_schemas == [None]
+
+
 def test_get_table_definition_normalizes_complete_inspector_payload(
     monkeypatch: pytest.MonkeyPatch, fake_connection: Connection
 ) -> None:
-    monkeypatch.setattr("sql_mini_mcp.db.reflection.inspect", lambda _connection: FakeInspector())
+    monkeypatch.setattr("sql_safe_mcp.db.reflection.inspect", lambda _connection: FakeInspector())
 
     definition = get_table_definition(fake_connection, "dbo", "Orders")
     payload = definition.model_dump(mode="json", by_alias=True)
@@ -222,7 +252,7 @@ def test_get_table_definition_derives_unique_constraints_when_dialect_omits_api(
             ]
 
     monkeypatch.setattr(
-        "sql_mini_mcp.db.reflection.inspect", lambda _connection: SqlServerInspector()
+        "sql_safe_mcp.db.reflection.inspect", lambda _connection: SqlServerInspector()
     )
 
     definition = get_table_definition(fake_connection, "dbo", "Orders")

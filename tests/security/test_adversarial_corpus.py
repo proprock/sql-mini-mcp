@@ -12,9 +12,9 @@ import pytest
 from corpus_support import TokenSources, expand, load_cases
 from support import FOREIGN, OTHER_KEY, OWN, SpyConnection, spy_service
 
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.security.tokens import PREFIX, TokenCodec
-from sql_mini_mcp.service import DatabaseService
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.security.tokens import PREFIX, TokenCodec
+from sql_safe_mcp.service import DatabaseService
 
 TOKENS = TokenSources(OWN, FOREIGN, TokenCodec("srv", OTHER_KEY))
 CASES = load_cases()

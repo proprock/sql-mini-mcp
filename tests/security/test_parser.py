@@ -1,10 +1,10 @@
 import pytest
 from sqlglot import exp
 
-import sql_mini_mcp.security.parser as parser_module
-from sql_mini_mcp.config import RuntimeConfig
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.security.parser import ParserLimits, parse_select
+import sql_safe_mcp.security.parser as parser_module
+from sql_safe_mcp.config import RuntimeConfig
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.security.parser import ParserLimits, parse_select
 
 LIMITS = ParserLimits(max_sql_chars=256, max_ast_nodes=50, max_joins=2, max_in_list_items=3)
 

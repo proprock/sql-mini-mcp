@@ -3,15 +3,15 @@
 ## Supported versions
 
 Only the latest release receives security fixes. Upgrade to the newest version from
-[PyPI](https://pypi.org/project/sql-mini-mcp/) or the
-[Releases](https://github.com/proprock/sql-mini-mcp/releases) page.
+[PyPI](https://pypi.org/project/sql-safe-mcp/) or the
+[Releases](https://github.com/proprock/sql-safe-mcp/releases) page.
 
 ## Reporting a vulnerability
 
 Do not open a public issue for a security problem. Use GitHub's private vulnerability reporting
 instead:
 
-**[Report a vulnerability](https://github.com/proprock/sql-mini-mcp/security/advisories/new)**
+**[Report a vulnerability](https://github.com/proprock/sql-safe-mcp/security/advisories/new)**
 
 Please include the affected version, what you observed, the steps to reproduce it against a
 disposable, non-production database, and a suggested fix if you have one. Never include a real

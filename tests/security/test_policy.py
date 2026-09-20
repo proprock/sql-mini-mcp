@@ -4,13 +4,14 @@ from typing import ClassVar
 import pytest
 from sqlglot import exp
 
-from sql_mini_mcp.config import PiiConfig, PiiRule
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.security.lineage import analyze_query
-from sql_mini_mcp.security.parser import ParserLimits, parse_select
-from sql_mini_mcp.security.policy import PiiPolicy, PolicyDecision
-from sql_mini_mcp.security.schema import resolve_tables
-from sql_mini_mcp.security.tokens import TokenCodec
+from sql_safe_mcp.config import PiiConfig, PiiRule
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.security.dialect import SQLSERVER
+from sql_safe_mcp.security.lineage import analyze_query
+from sql_safe_mcp.security.parser import ParserLimits, parse_select
+from sql_safe_mcp.security.policy import PiiPolicy, PolicyDecision
+from sql_safe_mcp.security.schema import resolve_tables
+from sql_safe_mcp.security.tokens import TokenCodec
 
 LIMITS = ParserLimits(4096, 500, 4, 10)
 KEY = bytes(range(32))
@@ -45,7 +46,7 @@ def token(value: object, codec: TokenCodec = CODEC) -> str:
 
 def evaluate(sql: str, database: str = "sales", codec: TokenCodec = CODEC) -> PolicyDecision:
     query = parse_select(sql, LIMITS)
-    analyzed = analyze_query(query, resolve_tables(query, Catalog()), LIMITS)
+    analyzed = analyze_query(query, resolve_tables(query, Catalog()), LIMITS, SQLSERVER)
     return PiiPolicy(database, CONFIG, codec).evaluate(analyzed)
 
 
@@ -144,7 +145,7 @@ def test_wildcard_database_rule_matches_any_database() -> None:
 def test_rule_without_schema_matches_every_schema() -> None:
     config = PiiConfig(rules=[PiiRule(database="*", table="Contacts", columns=["Email"])])
     query = parse_select("SELECT Email FROM Contacts", LIMITS)
-    analyzed = analyze_query(query, resolve_tables(query, Catalog()), LIMITS)
+    analyzed = analyze_query(query, resolve_tables(query, Catalog()), LIMITS, SQLSERVER)
     assert PiiPolicy("d", config, CODEC).evaluate(analyzed).protected == (True,)
 
 
@@ -153,7 +154,7 @@ def test_rule_matching_is_case_insensitive() -> None:
         rules=[PiiRule(database="*", schema="DBO", table="USERS", columns=["EMAIL"])]
     )
     query = parse_select("SELECT email FROM users", LIMITS)
-    analyzed = analyze_query(query, resolve_tables(query, Catalog()), LIMITS)
+    analyzed = analyze_query(query, resolve_tables(query, Catalog()), LIMITS, SQLSERVER)
     assert PiiPolicy("d", config, CODEC).evaluate(analyzed).protected == (True,)
 
 
@@ -180,7 +181,7 @@ def test_malformed_token_is_an_invalid_token(bad: str) -> None:
 def test_policy_does_not_touch_the_query() -> None:
     sql = f"SELECT Id FROM Users WHERE Email = {token('a')}"
     query = parse_select(sql, LIMITS)
-    analyzed = analyze_query(query, resolve_tables(query, Catalog()), LIMITS)
+    analyzed = analyze_query(query, resolve_tables(query, Catalog()), LIMITS, SQLSERVER)
     before = analyzed.query.sql("tsql")
     PiiPolicy("d", CONFIG, CODEC).evaluate(analyzed)
     assert analyzed.query.sql("tsql") == before

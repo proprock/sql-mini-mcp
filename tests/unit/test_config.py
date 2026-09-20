@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from sql_mini_mcp.config import load_config
-from sql_mini_mcp.errors import DomainError
+from sql_safe_mcp.config import load_config
+from sql_safe_mcp.errors import DomainError
 
 
 def _key(byte: int) -> str:
@@ -144,20 +144,75 @@ servers:
         load_config(path, env)
 
 
-def test_rejects_mysql_until_milestone_3(tmp_path: Path) -> None:
+@pytest.mark.parametrize("engine", ["mysql", "mariadb"])
+def test_accepts_mysql_family_metadata_servers(tmp_path: Path, engine: str) -> None:
     path = _write(
         tmp_path,
-        """
+        f"""
 version: 1
 servers:
-  future:
-    engine: mysql
+  one:
+    engine: {engine}
     connection_url: mysql+pymysql://user:password@localhost/database
+""",
+    )
+
+    assert load_config(path, {}).servers["one"].engine == engine
+
+
+@pytest.mark.parametrize(
+    ("engine", "url"),
+    [
+        ("mysql", "mssql+pyodbc://u:p@h/d?driver=x"),
+        ("mariadb", "mssql+pyodbc://u:p@h/d?driver=x"),
+        ("sqlserver", "mysql+pymysql://u:p@h/d"),
+    ],
+)
+def test_rejects_engine_driver_mismatch(tmp_path: Path, engine: str, url: str) -> None:
+    path = _write(
+        tmp_path,
+        f"""
+version: 1
+servers:
+  one:
+    engine: {engine}
+    connection_url: {url}
 """,
     )
 
     with pytest.raises(DomainError, match="CONFIG_ERROR"):
         load_config(path, {})
+
+
+@pytest.mark.parametrize("engine", ["mysql", "mariadb"])
+@pytest.mark.parametrize(("schema_line", "valid"), [("", True), ("          schema: app\n", False)])
+def test_pii_safe_for_mysql_family_forbids_rule_schema(
+    tmp_path: Path, engine: str, schema_line: str, valid: bool
+) -> None:
+    path = _write(
+        tmp_path,
+        f"""
+version: 1
+servers:
+  one:
+    engine: {engine}
+    access_level: pii_safe
+    connection_url: mysql+pymysql://user:password@localhost/database
+    pii_key_env: KEY
+    pii:
+      rules:
+        - database: "*"
+{schema_line}          table: users
+          columns: [email]
+""",
+    )
+    env = {"KEY": base64.b64encode(b"x" * 32).decode()}
+
+    if valid:
+        assert load_config(path, env).servers["one"].access_level == "pii_safe"
+    else:
+        with pytest.raises(DomainError, match="CONFIG_ERROR"):
+            load_config(path, env)
 
 
 @pytest.mark.parametrize(
