@@ -1,0 +1,351 @@
+# Adversarial SQL corpus: structural constructs outside the supported SELECT subset.
+
+# --- CTE, subquery, set operations -----------------------------------------------------------
+- name: cte
+  sql: "WITH x AS (SELECT Id FROM Users) SELECT Id FROM x"
+  reason: CTE
+- name: recursive cte
+  sql: "WITH x AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM x WHERE n < 100) SELECT n FROM x"
+  reason: recursive CTE
+- name: cte hiding table name
+  sql: "WITH Users AS (SELECT Id, Email FROM Users) SELECT Id FROM Users"
+  reason: CTE shadowing a protected table name
+- name: scalar subquery in select
+  sql: "SELECT (SELECT TOP 1 Email FROM Users) FROM Users"
+  reason: subquery can smuggle a protected column
+- name: subquery in where
+  sql: "SELECT Id FROM Users WHERE Id IN (SELECT Id FROM Orders)"
+  reason: subquery
+- name: correlated subquery
+  sql: "SELECT Id FROM Users u WHERE EXISTS (SELECT 1 FROM Orders o WHERE o.UserId = u.Id)"
+  reason: subquery
+- name: derived table
+  sql: "SELECT d.Email FROM (SELECT Email FROM Users) AS d"
+  reason: derived table hides lineage
+- name: derived table star
+  sql: "SELECT * FROM (SELECT Email AS Id FROM Users) AS d"
+  reason: derived table relabels a protected column
+- name: union exfil
+  sql: "SELECT Id FROM Users UNION SELECT Id FROM Orders"
+  reason: set operation
+- name: union all relabel
+  sql: "SELECT Name FROM Users UNION ALL SELECT Email FROM Users"
+  reason: set operation can relabel protected values
+- name: intersect
+  sql: "SELECT Id FROM Users INTERSECT SELECT Id FROM Orders"
+  reason: set operation
+- name: except
+  sql: "SELECT Id FROM Users EXCEPT SELECT Id FROM Orders"
+  reason: set operation
+- name: parenthesized select
+  sql: "(SELECT Id FROM Users)"
+  reason: root is not a plain SELECT
+- name: parenthesized union
+  sql: "(SELECT Id FROM Users) UNION (SELECT Id FROM Orders)"
+  reason: set operation
+- name: values table constructor
+  sql: "SELECT * FROM (VALUES (1), (2)) AS v(n)"
+  reason: table constructor
+- name: table value constructor in from
+  sql: "SELECT Id FROM Users, (VALUES (1)) AS v(n)"
+  reason: comma join and constructor
+- name: subquery as join source
+  sql: "SELECT u.Id FROM Users u JOIN (SELECT Id FROM Orders) o ON u.Id = o.Id"
+  reason: derived table
+
+# --- apply, pivot, hints ---------------------------------------------------------------------
+- name: cross apply function
+  sql: "SELECT u.Id FROM Users u CROSS APPLY dbo.F(u.Id) f"
+  reason: APPLY
+- name: outer apply subquery
+  sql: "SELECT u.Id FROM Users u OUTER APPLY (SELECT TOP 1 * FROM Orders) o"
+  reason: APPLY
+- name: pivot
+  sql: "SELECT * FROM Users PIVOT (COUNT(Id) FOR Name IN ([a])) p"
+  reason: PIVOT
+- name: unpivot exfil
+  sql: "SELECT * FROM Users UNPIVOT (v FOR c IN (Name, Email)) u"
+  reason: UNPIVOT relabels protected columns
+- name: nolock hint
+  sql: "SELECT Id FROM Users WITH (NOLOCK)"
+  reason: table hint
+- name: index hint
+  sql: "SELECT Id FROM Users WITH (INDEX(1))"
+  reason: table hint
+- name: forceseek
+  sql: "SELECT Id FROM Users WITH (FORCESEEK)"
+  reason: table hint
+- name: readpast
+  sql: "SELECT Id FROM Users WITH (READPAST)"
+  reason: table hint
+- name: option recompile
+  sql: "SELECT Id FROM Users OPTION (RECOMPILE)"
+  reason: query hint
+- name: option maxdop
+  sql: "SELECT Id FROM Users OPTION (MAXDOP 1)"
+  reason: query hint
+- name: option use hint
+  sql: "SELECT Id FROM Users OPTION (USE HINT('DISABLE_PARAMETER_SNIFFING'))"
+  reason: query hint
+- name: join hint
+  sql: "SELECT u.Id FROM Users u INNER HASH JOIN Orders o ON u.Id = o.Id"
+  reason: join hint
+- name: tablesample
+  sql: "SELECT Id FROM Users TABLESAMPLE (10 PERCENT)"
+  reason: sampling changes semantics
+- name: system time
+  sql: "SELECT Id FROM Users FOR SYSTEM_TIME ALL"
+  reason: temporal clause
+- name: for xml
+  sql: "SELECT Id FROM Users FOR XML AUTO"
+  reason: XML output
+- name: for xml path exfil
+  sql: "SELECT Email FROM Users FOR XML PATH('')"
+  reason: XML output aggregates protected values
+- name: for json
+  sql: "SELECT Id FROM Users FOR JSON AUTO"
+  reason: JSON output
+- name: right join
+  sql: "SELECT u.Id FROM Users u RIGHT JOIN Orders o ON u.Id = o.UserId"
+  reason: unsupported join type
+- name: full join
+  sql: "SELECT u.Id FROM Users u FULL OUTER JOIN Orders o ON u.Id = o.UserId"
+  reason: unsupported join type
+- name: cross join
+  sql: "SELECT u.Id FROM Users u CROSS JOIN Orders o"
+  reason: unsupported join type
+- name: implicit comma join
+  sql: "SELECT u.Id FROM Users u, Orders o WHERE u.Id = o.UserId"
+  reason: implicit join
+- name: join without on
+  sql: "SELECT u.Id FROM Users u JOIN Orders o"
+  reason: missing ON
+- name: join using
+  sql: "SELECT u.Id FROM Users u JOIN Orders o USING (Id)"
+  reason: unsupported syntax
+- name: natural join
+  sql: "SELECT u.Id FROM Users u NATURAL JOIN Orders o"
+  reason: unsupported syntax
+
+# --- variables, temp objects, dynamic SQL ------------------------------------------------------
+- name: local variable
+  sql: "SELECT @v"
+  reason: variable
+- name: system variable
+  sql: "SELECT @@version"
+  reason: server information
+- name: variable in predicate
+  sql: "SELECT Id FROM Users WHERE Id = @v"
+  reason: variable
+- name: table variable
+  sql: "SELECT Id FROM @t"
+  reason: table variable
+- name: temp table
+  sql: "SELECT Id FROM #t"
+  reason: temp table
+- name: global temp table
+  sql: "SELECT Id FROM ##t"
+  reason: global temp table
+- name: bracketed temp table
+  sql: "SELECT Id FROM [#t]"
+  reason: temp table
+- name: named parameter
+  sql: "SELECT Id FROM Users WHERE Id = :id"
+  reason: placeholder syntax
+- name: qmark placeholder
+  sql: "SELECT Id FROM Users WHERE Id = ?"
+  reason: placeholder syntax
+- name: percent format placeholder
+  sql: "SELECT Id FROM Users WHERE Name = %s"
+  reason: placeholder syntax
+- name: dynamic exec concat
+  sql: "SELECT Id FROM Users WHERE Id = 1; EXEC('SELECT ' + 'Email FROM Users')"
+  reason: dynamic sql
+- name: sp_executesql call
+  sql: "SELECT Id FROM Users WHERE Id IN (EXEC sp_executesql N'SELECT 1')"
+  reason: dynamic sql
+- name: goto label
+  sql: "SELECT Id FROM Users; GOTO x"
+  reason: flow control
+
+# --- functions, aggregates, exfiltration ------------------------------------------------------
+- name: scalar function
+  sql: "SELECT LOWER(Name) FROM Users"
+  reason: function
+- name: upper on protected
+  sql: "SELECT UPPER(Email) FROM Users"
+  reason: function over protected value
+- name: len on protected
+  sql: "SELECT LEN(Email) FROM Users"
+  reason: function leaks protected length
+- name: substring on protected
+  sql: "SELECT SUBSTRING(Email, 1, 1) FROM Users"
+  reason: function leaks protected characters
+- name: left on protected
+  sql: "SELECT LEFT(Email, 3) FROM Users"
+  reason: function leaks protected characters
+- name: checksum on protected
+  sql: "SELECT CHECKSUM(Email) FROM Users"
+  reason: function
+- name: hashbytes on protected
+  sql: "SELECT HASHBYTES('SHA2_256', Email) FROM Users"
+  reason: function
+- name: user defined function
+  sql: "SELECT dbo.F(Id) FROM Users"
+  reason: UDF
+- name: user defined function in where
+  sql: "SELECT Id FROM Users WHERE dbo.F(Id) = 1"
+  reason: UDF
+- name: system function
+  sql: "SELECT SUSER_SNAME()"
+  reason: function
+- name: db_name
+  sql: "SELECT DB_NAME()"
+  reason: function
+- name: getdate
+  sql: "SELECT GETDATE()"
+  reason: function
+- name: newid
+  sql: "SELECT NEWID()"
+  reason: function
+- name: sum
+  sql: "SELECT SUM(Id) FROM Users"
+  reason: aggregate
+- name: min on protected
+  sql: "SELECT MIN(Email) FROM Users"
+  reason: aggregate leaks a protected value
+- name: max on protected
+  sql: "SELECT MAX(Phone) FROM Users"
+  reason: aggregate leaks a protected value
+- name: avg
+  sql: "SELECT AVG(Id) FROM Users"
+  reason: aggregate
+- name: count column
+  sql: "SELECT COUNT(Email) FROM Users"
+  reason: only COUNT(*) is allowed
+- name: count distinct
+  sql: "SELECT COUNT(DISTINCT Email) FROM Users"
+  reason: distinct aggregate leaks cardinality of protected values
+- name: count with group by
+  sql: "SELECT Email, COUNT(*) FROM Users GROUP BY Email"
+  reason: group by
+- name: count with having
+  sql: "SELECT COUNT(*) FROM Users HAVING COUNT(*) > 1"
+  reason: having
+- name: string agg
+  sql: "SELECT STRING_AGG(Email, ',') FROM Users"
+  reason: aggregate concatenates protected values
+- name: distinct
+  sql: "SELECT DISTINCT Email FROM Users"
+  reason: distinct
+- name: window function
+  sql: "SELECT ROW_NUMBER() OVER (ORDER BY Email) FROM Users"
+  reason: window ordered by protected value
+- name: window partition
+  sql: "SELECT COUNT(*) OVER (PARTITION BY Email) FROM Users"
+  reason: window
+- name: json value
+  sql: "SELECT JSON_VALUE(Name, '$.a') FROM Users"
+  reason: JSON function
+- name: xml method
+  sql: "SELECT Name.value('(/a)[1]', 'int') FROM Users"
+  reason: XML method
+- name: case expression
+  sql: "SELECT CASE WHEN Id = 1 THEN 'a' ELSE 'b' END FROM Users"
+  reason: CASE
+- name: iif
+  sql: "SELECT IIF(Id = 1, 1, 0) FROM Users"
+  reason: function
+- name: coalesce
+  sql: "SELECT COALESCE(Email, 'x') FROM Users"
+  reason: function
+- name: isnull
+  sql: "SELECT ISNULL(Email, 'x') FROM Users"
+  reason: function
+- name: nullif
+  sql: "SELECT NULLIF(Email, 'x') FROM Users"
+  reason: function
+- name: cast
+  sql: "SELECT CAST(Id AS varchar(10)) FROM Users"
+  reason: CAST
+- name: convert
+  sql: "SELECT CONVERT(varchar(10), Id) FROM Users"
+  reason: CONVERT
+- name: arithmetic
+  sql: "SELECT Id + 1 FROM Users"
+  reason: arithmetic
+- name: string concat
+  sql: "SELECT Name + Email FROM Users"
+  reason: concatenation exposes protected value
+- name: bitwise
+  sql: "SELECT Id & 1 FROM Users"
+  reason: operator
+- name: like predicate
+  sql: "SELECT Id FROM Users WHERE Name LIKE 'a%'"
+  reason: LIKE
+- name: like on protected
+  sql: "SELECT Id FROM Users WHERE Email LIKE 'a%'"
+  reason: LIKE probes protected values
+- name: between
+  sql: "SELECT Id FROM Users WHERE Id BETWEEN 1 AND 2"
+  reason: BETWEEN
+- name: not predicate
+  sql: "SELECT Id FROM Users WHERE NOT Id = 1"
+  reason: NOT
+- name: is not null
+  sql: "SELECT Id FROM Users WHERE Name IS NOT NULL"
+  reason: IS NOT NULL
+- name: exists predicate
+  sql: "SELECT Id FROM Users WHERE EXISTS (SELECT 1)"
+  reason: subquery
+- name: any predicate
+  sql: "SELECT Id FROM Users WHERE Id = ANY (SELECT Id FROM Orders)"
+  reason: subquery
+- name: top percent
+  sql: "SELECT TOP 10 PERCENT Id FROM Users"
+  reason: TOP PERCENT
+- name: top with ties
+  sql: "SELECT TOP 1 WITH TIES Id FROM Users ORDER BY Id"
+  reason: TOP WITH TIES
+- name: top expression
+  sql: "SELECT TOP (1 + 1) Id FROM Users"
+  reason: TOP must be a literal
+- name: top variable
+  sql: "SELECT TOP (@n) Id FROM Users"
+  reason: TOP must be a literal
+- name: top negative
+  sql: "SELECT TOP -1 Id FROM Users"
+  reason: negative TOP
+- name: offset fetch
+  sql: "SELECT Id FROM Users ORDER BY Id OFFSET 5 ROWS FETCH NEXT 5 ROWS ONLY"
+  reason: OFFSET/FETCH bypasses the row cap semantics
+- name: order by ordinal
+  sql: "SELECT Id, Name FROM Users ORDER BY 2"
+  reason: ordinals hide the sorted column
+- name: order by expression
+  sql: "SELECT Id FROM Users ORDER BY Id + 1"
+  reason: expression
+- name: order by function
+  sql: "SELECT Id FROM Users ORDER BY LOWER(Name)"
+  reason: function
+- name: order by collate
+  sql: "SELECT Id FROM Users ORDER BY Name COLLATE Latin1_General_BIN"
+  reason: COLLATE
+- name: collate in predicate
+  sql: "SELECT Id FROM Users WHERE Name COLLATE Latin1_General_BIN = 'a'"
+  reason: COLLATE
+- name: is with non-null
+  sql: "SELECT Id FROM Users WHERE Name IS 1"
+  reason: IS supports only NULL
+- name: star comparison
+  sql: "SELECT Id FROM Users WHERE * = 1"
+  reason: malformed
+- name: select without from expression
+  sql: "SELECT 1 + 1"
+  reason: arithmetic
+- name: string literal concatenation
+  sql: "SELECT 'a' + 'b'"
+  reason: concatenation
+- name: typed literal
+  sql: "SELECT CAST('x' AS int)"
+  reason: CAST
