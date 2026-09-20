@@ -53,10 +53,8 @@ data.
 | `execute_sql` | 🟢 read | One restricted `SELECT` on a `pii_safe` server; protected columns return tokens |
 
 > [!NOTE]
-> **Status: unreleased `execute_sql`.** Version 0.9 supports SQL Server only. `execute_sql` is
-> implemented on the development branch but has not passed the security hardening gate, so it is
-> not released. MySQL/MariaDB is planned; see [ARCHITECTURE.md](ARCHITECTURE.md). Configuration
-> for MySQL/MariaDB is rejected until it ships.
+> **Status:** SQL Server only. MySQL/MariaDB is planned; see [ARCHITECTURE.md](ARCHITECTURE.md).
+> Configuration for MySQL/MariaDB is rejected until it ships.
 
 - [Install](#install)
 - [Configure](#configure)
@@ -78,7 +76,7 @@ or
 pip install sql-mini-mcp
 ```
 
-Pin a version when you want a fixed surface: `uvx sql-mini-mcp==0.9.1`.
+Pin a version when you want a fixed surface: `uvx sql-mini-mcp==1.0.0`.
 
 Requires Python 3.12+, [uv](https://docs.astral.sh/uv/) (or `pip`), and
 [Microsoft ODBC Driver 18 for SQL Server](https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server).

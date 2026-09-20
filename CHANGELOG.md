@@ -7,6 +7,8 @@ categories `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, and `Security`.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-20
+
 ### Added
 
 - `execute_sql` tool for `pii_safe` SQL Server aliases. It runs one restricted `SELECT`, returns

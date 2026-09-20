@@ -7,12 +7,12 @@
     "url": "https://github.com/proprock/sql-mini-mcp",
     "source": "github"
   },
-  "version": "0.9.1",
+  "version": "1.0.0",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "sql-mini-mcp",
-      "version": "0.9.1",
+      "version": "1.0.0",
       "transport": {
         "type": "stdio"
       }
