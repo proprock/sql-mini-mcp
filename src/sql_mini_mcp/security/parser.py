@@ -62,7 +62,7 @@ _ALLOWED_ARGS: dict[type[exp.Expr], frozenset[str]] = {
     exp.Identifier: frozenset({"this", "quoted"}),
     exp.Column: frozenset({"this", "table"}),
     exp.Star: frozenset(),
-    exp.Count: frozenset({"this"}),
+    exp.Count: frozenset({"this", "big_int"}),  # big_int: a flag the mysql parser sets
     exp.Literal: frozenset({"this", "is_string"}),
     exp.Null: frozenset(),
     exp.Neg: frozenset({"this"}),

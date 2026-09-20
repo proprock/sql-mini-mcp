@@ -194,3 +194,28 @@ def test_tsql_attack_shapes_are_one_safe_statement_in_mysql(sql: str) -> None:
     outside_literals = stripped.sql(dialect="mysql")
     assert ";" not in outside_literals
     assert "DROP" not in outside_literals
+
+
+def test_count_star_is_allowed_and_keeps_its_shape() -> None:
+    token = OWN.encrypt("a@example.com")
+
+    plain = validate("SELECT COUNT(*) FROM users")
+    aliased = validate(f"SELECT COUNT(*) AS n FROM users WHERE email = '{token}'")
+
+    assert plain.sql == "SELECT COUNT(*) FROM `users` LIMIT 201"
+    assert [output.kind for output in plain.outputs] == ["count"]
+    assert aliased.sql.startswith("SELECT COUNT(*) AS n FROM `users`")
+    assert aliased.parameters == ("a@example.com",)
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT COUNT(id) FROM users",
+        "SELECT COUNT(DISTINCT id) FROM users",
+        "SELECT COUNT(email) FROM users",
+        "SELECT COUNT(*), COUNT(*) FROM users GROUP BY id",
+    ],
+)
+def test_only_plain_count_star_is_allowed(sql: str) -> None:
+    rejected(sql)
