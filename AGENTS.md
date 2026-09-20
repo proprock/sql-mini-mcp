@@ -10,5 +10,7 @@ Read `ARCHITECTURE.md` before changing public contracts or security boundaries.
 - Never log connection URLs, credentials, keys, SQL bind values, tokens, or result rows.
 - Keep MCP tools few and responses compact; do not publish tables as MCP resources.
 - Keep changes and Conventional Commits task-scoped.
+- Create a Git worktree only when the source checkout has uncommitted source changes that must be
+  preserved, and only after the user explicitly approves it. Use the existing checkout otherwise.
 
 See `CONVENTIONS.md`, `SECURITY.md`, `CHECKS.md`, and `WORKFLOW.md` for task-specific detail.
