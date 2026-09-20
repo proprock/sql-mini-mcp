@@ -41,12 +41,12 @@
 
 ## Текущее состояние веток
 
-- `feature/sqlserver-metadata`: Milestone 0 и основная реализация Milestone 1.
+- `feature/pre-2a-metadata-closeout`: завершённый Milestone 0–1, основанный на
+  `feature/sqlserver-metadata` (`4844187`).
 - `feature/sqlserver-pii-sql`: изолированная заготовка Milestone 2. Она не готова к merge, пока не
   пройдены все задачи 2A и обязательный gate 2B.
-- На текущей машине fast gate Milestone 1 проходит: Ruff, ty, 17 tests. Live SQL Server test был
-  skipped, потому что `SQL_MINI_MCP_TEST_SQLSERVER_URL` не задан. Поэтому весь Milestone 1 пока
-  имеет статус `[~]`, несмотря на готовность кода.
+- На текущей машине Milestone 1 подтверждён fast gate (Ruff, ty, 52 tests) и live gate
+  (4 tests без skip) против SQL Server 2022 с compatibility level 130.
 
 ---
 
@@ -167,7 +167,7 @@ format, наличие correlation ID и отсутствие внутренни
 
 **Done when:** public model JSON не зависит от SQLAlchemy objects и не содержит secrets.
 
-## 1.3 [~] Реализовать lazy bounded `EngineRegistry`
+## 1.3 [x] Реализовать lazy bounded `EngineRegistry`
 
 **Файлы:** `src/sql_mini_mcp/db/registry.py`, `tests/unit/test_registry.py`.
 
@@ -188,10 +188,7 @@ unknown alias, concurrency peak не выше limit, timeout hook.
 **Done when:** тест реально запускает несколько concurrent operations и подтверждает заданный
 предел, а lifespan test подтверждает вызов `dispose()`.
 
-**Текущий gap:** lazy/LRU/dispose/concurrency тесты есть; ещё нужны focused tests для unknown alias,
-cursor timeout hook и disposal именно через MCP lifespan.
-
-## 1.4 [~] Реализовать portable table reflection
+## 1.4 [x] Реализовать portable table reflection
 
 **Файлы:** `src/sql_mini_mcp/db/reflection.py`, unit tests с fake/mock Inspector.
 
@@ -210,10 +207,7 @@ names в разных schemas, case-insensitive lookup, schema-qualified lookup,
 
 **Done when:** `get_table_definition` одним ответом возвращает все пять групп metadata.
 
-**Текущий gap:** implementation присутствует, но отдельного unit suite с fake Inspector для полной
-нормализации PK/FK/unique/index/column attributes пока нет.
-
-## 1.5 [~] Реализовать SQL Server extras
+## 1.5 [x] Реализовать SQL Server extras
 
 **Файлы:** `src/sql_mini_mcp/db/extras.py`, `src/sql_mini_mcp/db/sqlserver.py`.
 
@@ -230,10 +224,7 @@ ambiguous procedure, definition unavailable/oversized.
 
 **Done when:** vendor SQL находится только в SQL Server extras и не просачивается в service/MCP.
 
-**Текущий gap:** implementation присутствует, но row normalization, permissions и
-definition-size paths ещё не закрыты focused unit tests.
-
-## 1.6 [~] Реализовать `DatabaseService` facade
+## 1.6 [x] Реализовать `DatabaseService` facade
 
 **Файл:** `src/sql_mini_mcp/service.py`.
 
@@ -252,10 +243,7 @@ failure, unexpected exception redaction и отсутствие secret/SQL в lo
 
 **Done when:** ни один MCP handler не обращается к Engine/Inspector/extras напрямую.
 
-**Текущий gap:** покрыты table ambiguity и case-insensitive resolution; error mapping, filters и
-log-redaction paths требуют отдельных тестов.
-
-## 1.7 [~] Реализовать stdio MCP server и CLI
+## 1.7 [x] Реализовать stdio MCP server и CLI
 
 **Файлы:** `src/sql_mini_mcp/mcp_server.py`, `src/sql_mini_mcp/__main__.py`,
 `tests/contract/test_mcp_tools.py`.
@@ -278,16 +266,14 @@ CLI valid/invalid config exit codes.
 
 **Done when:** metadata branch не регистрирует `execute_sql` даже для `pii_safe` alias.
 
-**Текущий gap:** in-process tool list/structured output/error contract проверены; ещё нужны CLI
-exit-code tests и явная проверка `registry.dispose()` при завершении lifespan.
-
-## 1.8 [~] Выполнить реальный SQL Server integration gate
+## 1.8 [x] Выполнить реальный SQL Server integration gate
 
 **Файл fixture:** `tests/integration/sqlserver/`.
 
 **Подготовка:**
 
-- Использовать отдельную disposable database и least-privilege test credential.
+- Использовать переиспользуемые локальные container/test database и уникальные least-privilege
+  credentials на каждый прогон.
 - Передать URL только через `SQL_MINI_MCP_TEST_SQLSERVER_URL`.
 - Fixture создаёт уникальные schemas, одинаковые table names в двух schemas, FK/unique/index,
   procedure с definition и procedure без VIEW DEFINITION permission, если среда позволяет.
@@ -306,7 +292,7 @@ exit-code tests и явная проверка `registry.dispose()` при за�
 
 ```powershell
 uv run pytest tests/unit tests/contract -m "not integration"
-uv run pytest tests/integration/sqlserver -m integration -v
+.\scripts\test-sqlserver.ps1
 uv run ruff format --check .
 uv run ruff check .
 uv run ty check
@@ -314,7 +300,7 @@ git diff --check
 ```
 
 **Done when:** integration command завершился без skip и README содержит реально проверенную setup
-инструкцию. Сейчас fixture создан, но live run не выполнен — задача остаётся `[~]`.
+инструкцию.
 
 ## Milestone 1 acceptance
 
@@ -324,6 +310,12 @@ git diff --check
 - Invalid config/permissions/timeouts не раскрывают credentials, URL или DB error text.
 - `execute_sql` и security package отсутствуют в metadata merge diff.
 - После review ветка может быть squash-merged; только затем Milestone 2 branch обновляется от неё.
+
+**Проверено 2026-09-20:** Microsoft ODBC Driver 18.6.2.1; image
+`mcr.microsoft.com/mssql/server:2022-latest@sha256:ba4c8329f48fb8f02e1416be6a930ebfd71268caee78aa985f3af4315e457c89`;
+database compatibility level 130; Ruff и ty прошли; 52 unit/contract tests и 4 live tests прошли
+без skip. Повторный live run использовал уже запущенный container, а cleanup оставил 0 временных
+schemas и 0 временных logins.
 
 ---
 
@@ -656,8 +648,8 @@ limit enforcement; injection-after-decrypt остаётся bind.
 
 | Возможность | Ветка | Требуемое доказательство | Текущий статус |
 |---|---|---|---|
-| Project rules/config/core | `feature/sqlserver-metadata` | Ruff, ty, unit tests | готово |
-| SQL Server metadata MCP | `feature/sqlserver-metadata` | contract + live SQL Server без skip | код готов, live gate не выполнен |
+| Project rules/config/core | `feature/pre-2a-metadata-closeout` | Ruff, ty, unit tests | готово |
+| SQL Server metadata MCP | `feature/pre-2a-metadata-closeout` | contract + live SQL Server без skip | готово |
 | SQL Server `execute_sql` | `feature/sqlserver-pii-sql` | unit/contract/security-fast | draft, не принят |
 | Security hardening | `feature/sqlserver-pii-sql` | deep + mutation + writable canary | не выполнено |
 | MySQL/MariaDB | `feature/mysql-metadata` | common contract + 3-engine matrix | не начато |

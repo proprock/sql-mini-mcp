@@ -11,10 +11,10 @@ MCPServer -> DatabaseService -> EngineRegistry -> SQLAlchemy Core/Inspector -> D
                                -> DatabaseExtras
 ```
 
-Metadata calls are read-only. SQL execution accepts a strict `SELECT` subset and reaches the
-executor only as a `ValidatedQuery` produced by the security pipeline. The original SQL is never
-executed. PII keys and policies belong to a server alias; tokens are authenticated with that alias
-as associated data and cannot cross aliases.
+Milestone 1 exposes read-only metadata calls only. Milestone 2 will accept a strict `SELECT` subset
+and reach its executor only as a `ValidatedQuery` produced by the security pipeline; the original
+SQL will never be executed. PII keys and policies belong to a server alias, and future tokens are
+authenticated with that alias as associated data so they cannot cross aliases.
 
 ## Milestones
 
