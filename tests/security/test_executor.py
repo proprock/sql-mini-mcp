@@ -9,6 +9,7 @@ import pytest
 
 from sql_mini_mcp.config import PiiConfig, PiiRule, RuntimeConfig
 from sql_mini_mcp.errors import DomainError, ErrorCode
+from sql_mini_mcp.security.dialect import SQLSERVER
 from sql_mini_mcp.security.executor import execute_validated
 from sql_mini_mcp.security.pipeline import validate_sql
 from sql_mini_mcp.security.tokens import TokenCodec
@@ -74,6 +75,7 @@ def build(sql: str, max_rows: int = 3) -> ValidatedQuery:
         codec=CODEC,
         runtime=RUNTIME,
         max_rows=max_rows,
+        dialect=SQLSERVER,
     )
 
 

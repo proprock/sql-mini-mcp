@@ -22,7 +22,7 @@ class Reason(StrEnum):
     JOIN_TYPE_UNSUPPORTED = "only INNER JOIN and LEFT JOIN are supported"
     IS_NULL_ONLY = "IS is supported only with NULL"
     NEGATION_NUMERIC_ONLY = "negation is supported only for numeric literals"
-    TOP_INTEGER_ONLY = "TOP must be a non-negative integer literal"
+    TOP_INTEGER_ONLY = "TOP/LIMIT must be a non-negative integer literal"
     ORDER_DIRECT_COLUMNS_ONLY = "ORDER BY supports only direct columns"
     IN_LITERALS_ONLY = "IN supports a column and a list of literals"
     STAR_COMPARISON = "* cannot be compared"

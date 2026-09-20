@@ -8,8 +8,8 @@ from sqlglot import exp
 from sqlglot.errors import OptimizeError, SqlglotError
 from sqlglot.optimizer.qualify import qualify
 
+from sql_mini_mcp.security.dialect import SQLSERVER, SqlDialect
 from sql_mini_mcp.security.parser import (
-    DIALECT,
     ParserLimits,
     check_limits,
     reject,
@@ -17,8 +17,6 @@ from sql_mini_mcp.security.parser import (
 )
 from sql_mini_mcp.security.reasons import Reason
 from sql_mini_mcp.security.schema import TableSchema
-
-_CASE_SENSITIVE_DIALECT = f"{DIALECT}, normalization_strategy = case_sensitive"
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,15 +167,21 @@ def _resolve_order_column(
     return _rewrite(column, binding, canonical)
 
 
-def _cross_check(query: exp.Select, schemas: Sequence[TableSchema]) -> None:
-    catalog: dict[str, dict[str, dict[str, str]]] = {}
+def _cross_check(
+    query: exp.Select, schemas: Sequence[TableSchema], dialect: SqlDialect = SQLSERVER
+) -> None:
+    catalog: dict[str, dict] = {}
     for table in schemas:
-        catalog.setdefault(table.schema, {})[table.name] = dict.fromkeys(table.columns, "varchar")
+        columns = dict.fromkeys(table.columns, "varchar")
+        if dialect.has_schema:
+            catalog.setdefault(table.schema, {})[table.name] = columns
+        else:
+            catalog[table.name] = columns
     try:
         qualify(
             query.copy(),
             schema=cast(dict[str, object], catalog),
-            dialect=_CASE_SENSITIVE_DIALECT,
+            dialect=f"{dialect.name}, normalization_strategy = case_sensitive",
             validate_qualify_columns=True,
             expand_stars=False,
         )
@@ -186,7 +190,10 @@ def _cross_check(query: exp.Select, schemas: Sequence[TableSchema]) -> None:
 
 
 def analyze_query(
-    query: exp.Select, schemas: Sequence[TableSchema], limits: ParserLimits
+    query: exp.Select,
+    schemas: Sequence[TableSchema],
+    limits: ParserLimits,
+    dialect: SqlDialect = SQLSERVER,
 ) -> AnalyzedQuery:
     """Expand stars, resolve every column to a reflected source, and rebuild canonical names.
 
@@ -215,5 +222,5 @@ def analyze_query(
             refs.append(ColumnRef(column, _resolve_order_column(column, bindings, outputs)))
 
     validate_allowlist(working)
-    _cross_check(working, schemas)
+    _cross_check(working, schemas, dialect)
     return AnalyzedQuery(working, tuple(outputs), tuple(refs))

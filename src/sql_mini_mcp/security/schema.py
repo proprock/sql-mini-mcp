@@ -12,6 +12,7 @@ from sqlalchemy.exc import NoSuchTableError
 from sqlglot import exp
 
 from sql_mini_mcp.db.reflection import list_tables as reflect_tables
+from sql_mini_mcp.security.dialect import SQLSERVER, SqlDialect
 from sql_mini_mcp.security.parser import reject
 from sql_mini_mcp.security.reasons import Reason
 
@@ -113,7 +114,9 @@ def _match(tables: Sequence[tuple[str, str]], schema: str | None, name: str) -> 
     return matches[0]
 
 
-def resolve_tables(query: exp.Select, catalog: TableCatalog) -> tuple[TableSchema, ...]:
+def resolve_tables(
+    query: exp.Select, catalog: TableCatalog, dialect: SqlDialect = SQLSERVER
+) -> tuple[TableSchema, ...]:
     """Resolve every raw-AST table against reflection and rewrite it to its reflected name.
 
     Raises QUERY_REJECTED for missing, ambiguous, system, and cross-database objects.
@@ -123,11 +126,14 @@ def resolve_tables(query: exp.Select, catalog: TableCatalog) -> tuple[TableSchem
     for table in query.find_all(exp.Table):
         if table.args.get("catalog") or not isinstance(table.this, exp.Identifier):
             raise reject(Reason.TABLE_SCOPE)
+        if not dialect.has_schema and table.db:
+            raise reject(Reason.TABLE_SCOPE)  # db.table is a cross-database reference
         schema = table.db or None
         schema_name, table_name = _match(available, schema, table.name)
         resolved.append(
             TableSchema(schema_name, table_name, tuple(catalog.columns(schema_name, table_name)))
         )
         table.set("this", exp.to_identifier(table_name, quoted=True))
-        table.set("db", exp.to_identifier(schema_name, quoted=True))
+        if dialect.has_schema:
+            table.set("db", exp.to_identifier(schema_name, quoted=True))
     return tuple(resolved)

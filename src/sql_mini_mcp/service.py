@@ -29,6 +29,7 @@ from sql_mini_mcp.models import (
     TableList,
     TableSummary,
 )
+from sql_mini_mcp.security.dialect import dialect_for
 from sql_mini_mcp.security.executor import execute_validated
 from sql_mini_mcp.security.pipeline import validate_sql
 from sql_mini_mcp.security.schema import ReflectedCatalog, SchemaCache, TableCatalog
@@ -284,6 +285,7 @@ class DatabaseService:
         rows_limit = runtime.default_max_rows if max_rows is None else max_rows
         codec = self._tokens.codec_for(server)
         pii = configured.pii
+        dialect = dialect_for(configured.engine)
 
         def operation(engine: Engine) -> SqlResult:
             with engine.connect() as connection:
@@ -296,6 +298,7 @@ class DatabaseService:
                     codec=codec,
                     runtime=runtime,
                     max_rows=rows_limit,
+                    dialect=dialect,
                 )
                 executed = execute_validated(connection, validated, codec)
             return SqlResult(
@@ -305,7 +308,7 @@ class DatabaseService:
                         source=None
                         if column.source is None
                         else ColumnSource(
-                            schema=column.source.schema,
+                            schema=column.source.schema or None,
                             table=column.source.table,
                             column=column.source.column,
                         ),

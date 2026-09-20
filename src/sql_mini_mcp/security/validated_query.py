@@ -9,9 +9,9 @@ from sqlglot import exp
 
 from sql_mini_mcp.config import RuntimeConfig
 from sql_mini_mcp.errors import DomainError, ErrorCode
+from sql_mini_mcp.security.dialect import SQLSERVER, SqlDialect
 from sql_mini_mcp.security.lineage import AnalyzedQuery, SourceColumn
 from sql_mini_mcp.security.parser import (
-    DIALECT,
     ParserLimits,
     check_limits,
     reject,
@@ -35,8 +35,8 @@ class OutputPlan:
 class ValidatedQuery:
     """SQL produced by the validation pipeline; the only input the executor accepts.
 
-    `sql` uses qmark (`?`) markers and `parameters` holds the matching decrypted values, so no
-    bind value is ever part of the statement text.
+    `sql` uses the dialect bind markers (`?` or `%s`) and `parameters` holds the matching decrypted
+    values, so no bind value is ever part of the statement text.
 
     Instances are issued by `issue_validated_query` after the final AST check. There is no public
     constructor, and the object cannot be copied or serialized. `repr` never shows SQL or binds.
@@ -101,7 +101,7 @@ class ValidatedQuery:
 
     @property
     def parameters(self) -> tuple[Any, ...]:
-        """Bind values in the order of the `?` markers in `sql`."""
+        """Bind values in the order of the bind markers in `sql`."""
         return self._parameters
 
     @property
@@ -139,8 +139,10 @@ def _cap_rows(query: exp.Select, max_rows: int) -> None:
     query.set("limit", exp.Limit(expression=exp.Literal.number(min(requested, fetch))))
 
 
-def _to_qmark(query: exp.Select, parameters: dict[str, Any]) -> tuple[str, tuple[Any, ...]]:
-    """Render `?` markers and order the values by their position in the generated text.
+def _to_positional(
+    query: exp.Select, parameters: dict[str, Any], dialect: SqlDialect
+) -> tuple[str, tuple[Any, ...]]:
+    """Render the dialect bind markers and order the values by their position in the generated text.
 
     Each placeholder is generated as a random one-time marker first, so user literals containing
     colons or marker-like text cannot be mistaken for binds.
@@ -152,12 +154,14 @@ def _to_qmark(query: exp.Select, parameters: dict[str, Any]) -> tuple[str, tuple
         marker = f"__bind_{nonce}_{len(markers)}__"
         markers[marker] = str(placeholder.this)
         placeholder.replace(exp.Var(this=marker))
-    sql = rendered.sql(dialect=DIALECT)
+    sql = rendered.sql(dialect=dialect.name)
+    if dialect.escape_percent:
+        sql = sql.replace("%", "%%")
     found = re.findall(rf"__bind_{nonce}_\d+__", sql)
     if len(found) != len(markers) or set(found) != set(markers):
         raise reject(Reason.BIND_UNSAFE)
     for marker in found:
-        sql = sql.replace(marker, "?", 1)
+        sql = sql.replace(marker, dialect.bind_marker, 1)
     return sql, tuple(parameters[markers[marker]] for marker in found)
 
 
@@ -170,6 +174,7 @@ def issue_validated_query(
     max_rows: int,
     runtime: RuntimeConfig,
     limits: ParserLimits,
+    dialect: SqlDialect = SQLSERVER,
 ) -> ValidatedQuery:
     """Rewrite tokens to binds, cap rows, re-validate, and generate SQL from the final AST.
 
@@ -185,7 +190,7 @@ def issue_validated_query(
     _cap_rows(query, max_rows)
     check_limits(query, limits)
     validate_allowlist(query, allow_placeholders=True)
-    sql, ordered = _to_qmark(query, parameters)
+    sql, ordered = _to_positional(query, parameters, dialect)
     if PREFIX in sql:
         raise reject(Reason.TOKEN_NOT_REPLACED)
     outputs = tuple(

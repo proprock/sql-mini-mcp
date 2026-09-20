@@ -13,6 +13,7 @@ from hypothesis import strategies as st
 
 from sql_mini_mcp.config import AppConfig, PiiConfig, PiiRule, RuntimeConfig
 from sql_mini_mcp.db.registry import EngineRegistry
+from sql_mini_mcp.security.dialect import SQLSERVER
 from sql_mini_mcp.security.pipeline import validate_sql
 from sql_mini_mcp.security.tokens import TokenCodec
 from sql_mini_mcp.security.validated_query import ValidatedQuery
@@ -60,6 +61,7 @@ def validate(sql: str, max_rows: int = 200) -> ValidatedQuery:
         codec=OWN,
         runtime=RUNTIME,
         max_rows=max_rows,
+        dialect=SQLSERVER,
     )
 
 

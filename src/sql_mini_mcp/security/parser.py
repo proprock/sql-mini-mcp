@@ -7,9 +7,8 @@ from sqlglot import exp
 
 from sql_mini_mcp.config import RuntimeConfig
 from sql_mini_mcp.errors import DomainError, ErrorCode
+from sql_mini_mcp.security.dialect import SQLSERVER, SqlDialect
 from sql_mini_mcp.security.reasons import Reason
-
-DIALECT = "tsql"
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,12 +162,12 @@ def strip_comments(query: exp.Expression) -> None:
         node.pop_comments()
 
 
-def parse_select(sql: str, limits: ParserLimits) -> exp.Select:
+def parse_select(sql: str, limits: ParserLimits, dialect: SqlDialect = SQLSERVER) -> exp.Select:
     """Parse exactly one root SELECT; any failure becomes QUERY_REJECTED."""
     if len(sql) > limits.max_sql_chars:
         raise reject(Reason.LIMIT_CHARS)
     try:
-        statements = [s for s in sqlglot.parse(sql, dialect=DIALECT) if s is not None]
+        statements = [s for s in sqlglot.parse(sql, dialect=dialect.name) if s is not None]
         if len(statements) != 1:
             raise reject(Reason.ONE_STATEMENT)
         query = statements[0]

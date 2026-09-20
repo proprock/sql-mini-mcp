@@ -185,8 +185,9 @@ servers:
 
 
 @pytest.mark.parametrize("engine", ["mysql", "mariadb"])
-def test_rejects_pii_safe_for_mysql_family_until_dialect_support(
-    tmp_path: Path, engine: str
+@pytest.mark.parametrize(("schema_line", "valid"), [("", True), ("          schema: app\n", False)])
+def test_pii_safe_for_mysql_family_forbids_rule_schema(
+    tmp_path: Path, engine: str, schema_line: str, valid: bool
 ) -> None:
     path = _write(
         tmp_path,
@@ -201,14 +202,17 @@ servers:
     pii:
       rules:
         - database: "*"
-          table: users
+{schema_line}          table: users
           columns: [email]
 """,
     )
     env = {"KEY": base64.b64encode(b"x" * 32).decode()}
 
-    with pytest.raises(DomainError, match="CONFIG_ERROR"):
-        load_config(path, env)
+    if valid:
+        assert load_config(path, env).servers["one"].access_level == "pii_safe"
+    else:
+        with pytest.raises(DomainError, match="CONFIG_ERROR"):
+            load_config(path, env)
 
 
 @pytest.mark.parametrize(

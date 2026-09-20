@@ -53,6 +53,23 @@ class EngineRegistry:
             if hasattr(dbapi_connection, "timeout"):
                 dbapi_connection.timeout = timeout
 
+        if server.engine in ("mysql", "mariadb"):
+
+            @event.listens_for(engine, "connect")
+            def keep_backslash_escapes(dbapi_connection: Any, _record: Any) -> None:
+                # NO_BACKSLASH_ESCAPES would make the generated SQL's string escaping unsafe.
+                cursor = dbapi_connection.cursor()
+                try:
+                    cursor.execute("SELECT @@SESSION.sql_mode")
+                    modes = [
+                        mode
+                        for mode in str(cursor.fetchone()[0]).split(",")
+                        if mode and mode != "NO_BACKSLASH_ESCAPES"
+                    ]
+                    cursor.execute("SET SESSION sql_mode = %s", (",".join(modes),))
+                finally:
+                    cursor.close()
+
         @event.listens_for(engine, "before_cursor_execute")
         def set_statement_timeout(
             _connection: Any,

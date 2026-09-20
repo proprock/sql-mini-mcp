@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from sql_mini_mcp.config import PiiConfig, RuntimeConfig
+from sql_mini_mcp.security.dialect import SqlDialect
 from sql_mini_mcp.security.lineage import analyze_query
 from sql_mini_mcp.security.parser import ParserLimits, parse_select
 from sql_mini_mcp.security.policy import PiiPolicy
@@ -19,15 +20,16 @@ def validate_sql(
     codec: TokenCodec,
     runtime: RuntimeConfig,
     max_rows: int,
+    dialect: SqlDialect,
 ) -> ValidatedQuery:
     """Run caller SQL through parse, allowlist, reflection, lineage, and PII policy.
 
     Any rejection raises a DomainError before the catalog or database is used further.
     """
     limits = ParserLimits.from_runtime(runtime)
-    query = parse_select(sql, limits)
-    tables = resolve_tables(query, catalog)
-    analyzed = analyze_query(query, tables, limits)
+    query = parse_select(sql, limits, dialect)
+    tables = resolve_tables(query, catalog, dialect)
+    analyzed = analyze_query(query, tables, limits, dialect)
     decision = PiiPolicy(database, pii_config, codec).evaluate(analyzed)
     return issue_validated_query(
         analyzed,
@@ -37,4 +39,5 @@ def validate_sql(
         max_rows=max_rows,
         runtime=runtime,
         limits=limits,
+        dialect=dialect,
     )

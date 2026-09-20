@@ -179,3 +179,42 @@ def test_registry_passes_pymysql_timeouts_as_connect_args(
         "read_timeout": 30,
         "write_timeout": 30,
     }
+
+
+def test_registry_removes_no_backslash_escapes_from_mysql_sessions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    callbacks: list[Callable[..., None]] = []
+
+    def listens_for(_engine: object, event_name: str) -> Callable[..., object]:
+        def decorate(callback: Callable[..., None]) -> Callable[..., None]:
+            if event_name == "connect":
+                callbacks.append(callback)
+            return callback
+
+        return decorate
+
+    monkeypatch.setattr("sql_mini_mcp.db.registry.create_engine", Mock(return_value=Mock()))
+    monkeypatch.setattr("sql_mini_mcp.db.registry.event.listens_for", listens_for)
+    config = AppConfig(
+        version=1,
+        servers={
+            "one": ServerConfig(
+                engine="mysql", connection_url=SecretStr("mysql+pymysql://u:p@one/app")
+            )
+        },
+    )
+
+    EngineRegistry(config).get("one", "tenant")
+
+    cursor = Mock()
+    cursor.fetchone.return_value = ("ANSI_QUOTES,NO_BACKSLASH_ESCAPES,STRICT_TRANS_TABLES",)
+    connection = Mock()
+    connection.cursor.return_value = cursor
+    for callback in callbacks:
+        callback(connection, None)
+
+    cursor.execute.assert_any_call(
+        "SET SESSION sql_mode = %s", ("ANSI_QUOTES,STRICT_TRANS_TABLES",)
+    )
+    cursor.close.assert_called_once_with()
