@@ -1,0 +1,61 @@
+# Checks
+
+Fast checks:
+
+```powershell
+uv sync --all-groups --locked
+uv run ruff format --check .
+uv run ruff check .
+uv run ty check
+uv run pytest tests/unit tests/contract -q
+```
+
+Install the existing commit hooks once after syncing dependencies, then run them before a commit:
+
+```powershell
+uv run prek install
+uv run prek run --all-files
+```
+
+Never bypass a failing hook with `--no-verify`; fix the failure. Hooks do not replace the focused
+test suite.
+
+For a behavior-changing implementation phase, review statement and branch coverage separately:
+
+```powershell
+uv run pytest tests/unit tests/contract --cov=sql_mini_mcp --cov-branch --cov-report=term-missing
+```
+
+Coverage does not replace behavioral assertions. Review the missing-line report, add relevant
+tests or document an intentional exclusion, and report the result. Do not state that any check
+passed unless it was executed.
+
+Validate the example configuration after defining its documented environment variables:
+
+```powershell
+uv run sql-mini-mcp --config sql-mini-mcp.example.yaml --check-config
+```
+
+The normal Windows live gate starts or reuses the digest-pinned SQL Server 2022 container and keeps
+it running between checks. Test SQL objects and credentials are uniquely named and cleaned after
+each run:
+
+```powershell
+.\scripts\test-sqlserver.ps1
+```
+
+For an externally managed disposable SQL Server, define the admin URL directly:
+
+```powershell
+$env:SQL_MINI_MCP_TEST_SQLSERVER_URL = "mssql+pyodbc://..."
+uv run pytest tests/integration/sqlserver -m integration
+```
+
+Explicit local Docker cleanup is separate from the gate and removes the test container and volume:
+
+```powershell
+.\scripts\test-sqlserver.ps1 -Reset
+```
+
+Security-fast, deep, and mutation commands belong to Milestone 2 and are intentionally absent from
+this metadata-only branch.
