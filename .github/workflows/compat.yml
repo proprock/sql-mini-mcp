@@ -27,5 +27,6 @@ jobs:
           ./mcp-publisher status \
             --status deprecated \
             --all-versions \
+            --yes \
             --message "Renamed to ${NEW_SERVER}" \
             "${OLD_SERVER}"
