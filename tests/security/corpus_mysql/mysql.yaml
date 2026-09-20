@@ -243,7 +243,7 @@
   sql: "SELECT id FROM users IGNORE INDEX (primary)"
   reason: index hints are not allowed
 - name: straight join
-  sql: "SELECT u.id FROM users u STRAIGHT_JOIN orders o ON o.user_id = u.id"
+  sql: "SELECT u.id FROM users u STRAIGHT_JOIN orders o ON o.userid = u.id"
   reason: only INNER and LEFT joins are allowed
 - name: natural join
   sql: "SELECT u.id FROM users u NATURAL JOIN orders"
@@ -255,7 +255,7 @@
   sql: "SELECT u.id FROM users u CROSS JOIN orders o"
   reason: joins need an ON clause
 - name: right join
-  sql: "SELECT u.id FROM users u RIGHT JOIN orders o ON o.user_id = u.id"
+  sql: "SELECT u.id FROM users u RIGHT JOIN orders o ON o.userid = u.id"
   reason: only INNER and LEFT joins are allowed
 - name: comma join
   sql: "SELECT u.id FROM users u, orders o"

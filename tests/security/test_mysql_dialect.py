@@ -23,7 +23,7 @@ class MysqlCatalog:
 
     tables: ClassVar[dict[str, list[str]]] = {
         "users": ["id", "email", "phone", "name"],
-        "orders": ["id", "user_id", "total"],
+        "orders": ["id", "userid", "total"],
         "canary": ["id"],
     }
 
@@ -96,7 +96,7 @@ def test_requested_limit_is_capped_not_raised() -> None:
 
 
 def test_generated_sql_reparses_and_revalidates() -> None:
-    query = validate("SELECT u.id FROM users u JOIN orders o ON o.user_id = u.id WHERE o.id > 1")
+    query = validate("SELECT u.id FROM users u JOIN orders o ON o.userid = u.id WHERE o.id > 1")
 
     reparsed = sqlglot.parse_one(query.sql.replace("%s", "1"), dialect="mysql")
 

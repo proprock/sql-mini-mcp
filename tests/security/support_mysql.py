@@ -6,11 +6,30 @@ import base64
 from collections.abc import Sequence
 from typing import ClassVar, cast
 
-from support import ALIAS, KEY, OTHER_KEY, SpyConnection, _SpyRegistry
+from support import (
+    ALIAS,
+    DATABASE,
+    KEY,
+    OTHER_KEY,
+    OWN,
+    RUNTIME,
+    SpyConnection,
+    _SpyRegistry,
+)
 
-from sql_mini_mcp.config import AppConfig
+from sql_mini_mcp.config import AppConfig, PiiConfig, PiiRule
 from sql_mini_mcp.db.registry import EngineRegistry
+from sql_mini_mcp.security.dialect import MYSQL
+from sql_mini_mcp.security.pipeline import validate_sql
+from sql_mini_mcp.security.validated_query import ValidatedQuery
 from sql_mini_mcp.service import DatabaseService
+
+MYSQL_PII = PiiConfig(
+    rules=[
+        PiiRule(database="*", table="users", columns=["email", "phone"]),
+        PiiRule(database=DATABASE, table="orders", columns=["total"]),
+    ]
+)
 
 
 class MysqlCatalog:
@@ -18,7 +37,7 @@ class MysqlCatalog:
 
     tables: ClassVar[dict[str, list[str]]] = {
         "users": ["id", "email", "phone", "name"],
-        "orders": ["id", "user_id", "total"],
+        "orders": ["id", "userid", "total"],
         "canary": ["id"],
     }
 
@@ -56,4 +75,18 @@ def spy_mysql_service(connection: SpyConnection, engine: str = "mysql") -> Datab
         mysql_config(engine),
         cast(EngineRegistry, _SpyRegistry(connection)),
         catalog_factory=lambda *_: MysqlCatalog(),
+    )
+
+
+def validate_mysql(sql: str, max_rows: int = 200) -> ValidatedQuery:
+    return validate_sql(
+        sql,
+        alias=ALIAS,
+        database=DATABASE,
+        catalog=MysqlCatalog(),
+        pii_config=MYSQL_PII,
+        codec=OWN,
+        runtime=RUNTIME,
+        max_rows=max_rows,
+        dialect=MYSQL,
     )
