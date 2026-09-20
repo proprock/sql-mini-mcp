@@ -12,5 +12,6 @@ Read `ARCHITECTURE.md` before changing public contracts or security boundaries.
 - Keep changes and Conventional Commits task-scoped.
 - Create a Git worktree only when the source checkout has uncommitted source changes that must be
   preserved, and only after the user explicitly approves it. Use the existing checkout otherwise.
+- Do not modify `.gitignore` without the user's explicit approval.
 
 See `CONVENTIONS.md`, `SECURITY.md`, `CHECKS.md`, and `WORKFLOW.md` for task-specific detail.

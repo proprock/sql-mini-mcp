@@ -1,6 +1,5 @@
 /.serena/
 /*.agents.md
-!/ROADMAP.agents.md
 /.coverage
 /.coverage.*
 /coverage.xml
