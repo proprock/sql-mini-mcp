@@ -7,9 +7,15 @@ categories `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, and `Security`.
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-09-20
+
 ### Added
 
 - Publishing of release-tag packages to PyPI and their metadata to the MCP Registry.
+
+### Fixed
+
+- Source distributions now include only release files, excluding local development caches.
 
 ## [0.9.0] - 2026-09-20
 
