@@ -29,7 +29,7 @@ servers:
 | Key | Meaning |
 |---|---|
 | alias (the map key) | Letters, digits, `.`, `_`, `-`; starts with a letter or digit. This is what the agent passes as `server`. |
-| `engine` | `sqlserver` (`mssql+pyodbc`), `mysql` or `mariadb` (both `mysql+pymysql`). MySQL and MariaDB are `metadata` only: `pii_safe` is rejected, and `schema` is always `null`. |
+| `engine` | `sqlserver` (`mssql+pyodbc`), `mysql` or `mariadb` (both `mysql+pymysql`). MySQL and MariaDB have no schema level: `schema` is always `null`, and a `pii` rule for them must not set `schema` (the table is matched by `database` and `table`). |
 | `access_level` | `metadata` (default) or `pii_safe`. |
 | `connection_url` | A SQLAlchemy `mssql+pyodbc://` URL. Treated as a secret. |
 | `pii_key_env`, `pii` | Only for `pii_safe`; see below. |

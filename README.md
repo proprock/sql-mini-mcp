@@ -2,7 +2,7 @@
 
 # sql-mini-mcp
 
-A read-only, PII-safe SQL Server MCP server for coding agents: schema knowledge and safe queries, with no way to change or leak data.
+A read-only, PII-safe SQL Server, MySQL and MariaDB MCP server for coding agents: schema knowledge and safe queries, with no way to change or leak data.
 
 [![CI](https://github.com/proprock/sql-mini-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/proprock/sql-mini-mcp/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/proprock/sql-mini-mcp)](https://github.com/proprock/sql-mini-mcp/releases)
@@ -66,8 +66,8 @@ databases, tables, columns, keys, indexes, stored procedures - and, on servers y
 
 > [!NOTE]
 > **Status:** SQL Server supports every tool. MySQL and MariaDB (`engine: mysql` or `mariadb`,
-> `mysql+pymysql` URLs) support the metadata tools only: `schema` is always `null` because the
-> database is the catalog, and `pii_safe` / `execute_sql` are rejected until SQL support ships. See
+> `mysql+pymysql` URLs) support every tool too. `schema` is always `null` there because the
+> database is the catalog, and `execute_sql` uses `LIMIT` instead of `TOP`. See
 > [ARCHITECTURE.md](ARCHITECTURE.md).
 
 - [Install](#install)
