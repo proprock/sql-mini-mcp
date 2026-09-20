@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class OutputModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
 
 class ServerSummary(OutputModel):
@@ -28,7 +28,7 @@ class DatabaseList(OutputModel):
 
 
 class TableSummary(OutputModel):
-    schema_: str | None = Field(serialization_alias="schema")
+    schema_: str | None = Field(alias="schema")
     name: str
 
 
@@ -76,7 +76,7 @@ class IndexDefinition(OutputModel):
 
 
 class TableDefinition(OutputModel):
-    schema_: str | None = Field(serialization_alias="schema")
+    schema_: str | None = Field(alias="schema")
     name: str
     columns: list[ColumnDefinition]
     primary_key: PrimaryKeyDefinition
@@ -86,7 +86,7 @@ class TableDefinition(OutputModel):
 
 
 class StoredProcedureSummary(OutputModel):
-    schema_: str | None = Field(serialization_alias="schema")
+    schema_: str | None = Field(alias="schema")
     name: str
 
 
@@ -95,7 +95,7 @@ class StoredProcedureList(OutputModel):
 
 
 class StoredProcedureDefinition(OutputModel):
-    schema_: str | None = Field(serialization_alias="schema")
+    schema_: str | None = Field(alias="schema")
     name: str
     definition: str | None
     definition_available: bool
