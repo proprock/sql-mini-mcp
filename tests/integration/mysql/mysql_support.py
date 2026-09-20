@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import os
 from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Literal
 from uuid import uuid4
@@ -95,9 +96,8 @@ def _run(url: URL, statements: Sequence[str | tuple[str, tuple]]) -> None:
         engine.dispose()
 
 
-@pytest.fixture(scope="module", params=["mysql", "mariadb"])
-def live_mysql(request: pytest.FixtureRequest) -> Iterator[LiveMySql]:
-    engine: Engine = request.param
+@contextmanager
+def live_server(engine: Engine) -> Iterator[LiveMySql]:
     raw_url = os.environ.get(_ENV[engine])
     if not raw_url:
         pytest.skip(f"{_ENV[engine]} is not configured")
@@ -207,3 +207,21 @@ def live_mysql(request: pytest.FixtureRequest) -> Iterator[LiveMySql]:
         )
     finally:
         _run(admin_url, cleanup)
+
+
+@pytest.fixture(scope="module", params=["mysql", "mariadb"])
+def live_mysql(request: pytest.FixtureRequest) -> Iterator[LiveMySql]:
+    with live_server(request.param) as live:
+        yield live
+
+
+@pytest.fixture(scope="module")
+def live_mysql_only() -> Iterator[LiveMySql]:
+    with live_server("mysql") as live:
+        yield live
+
+
+@pytest.fixture(scope="module")
+def live_mariadb_only() -> Iterator[LiveMySql]:
+    with live_server("mariadb") as live:
+        yield live
