@@ -58,6 +58,7 @@ markers = [
 
 [tool.mutmut]
 source_paths = ["src/sql_mini_mcp"]
+also_copy = ["server.json", "README.md"]
 only_mutate = ["*security/*.py", "*config.py"]
 mutate_only_covered_lines = true
 pytest_add_cli_args = ["-q", "-m", "not integration and not deep", "-p", "no:cacheprovider"]
