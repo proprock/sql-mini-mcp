@@ -45,6 +45,10 @@ def _contains(value: str, needle: str | None) -> bool:
     return needle is None or needle.casefold() in value.casefold()
 
 
+def _qualified_name(schema: str | None, name: str) -> str:
+    return name if schema is None else f"{schema}.{name}"
+
+
 class DatabaseService:
     def __init__(
         self,
@@ -181,7 +185,7 @@ class DatabaseService:
         if not matches:
             raise DomainError(ErrorCode.NOT_FOUND, f"Table {table!r} was not found.")
         if len(matches) > 1:
-            candidates = ", ".join(f"{item.schema_}.{item.name}" for item in matches)
+            candidates = ", ".join(_qualified_name(item.schema_, item.name) for item in matches)
             raise DomainError(
                 ErrorCode.AMBIGUOUS_OBJECT,
                 f"Table {table!r} is ambiguous.",
@@ -239,7 +243,7 @@ class DatabaseService:
         if not matches:
             raise DomainError(ErrorCode.NOT_FOUND, f"Stored procedure {name!r} was not found.")
         if len(matches) > 1:
-            candidates = ", ".join(f"{item.schema_}.{item.name}" for item in matches)
+            candidates = ", ".join(_qualified_name(item.schema_, item.name) for item in matches)
             raise DomainError(
                 ErrorCode.AMBIGUOUS_OBJECT,
                 f"Stored procedure {name!r} is ambiguous.",

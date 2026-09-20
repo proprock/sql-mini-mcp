@@ -240,3 +240,17 @@ def test_unexpected_failure_logs_only_generic_context_and_correlation_id(
     assert "Unexpected database operation failure" in captured
     assert "SELECT secret" not in captured
     assert "password" not in captured
+
+
+def test_ambiguous_table_candidates_omit_null_schema() -> None:
+    tables = [
+        TableSummary(schema_=None, name="Users"),
+        TableSummary(schema_=None, name="users"),
+    ]
+
+    with pytest.raises(DomainError) as raised:
+        DatabaseService._resolve_table(tables, "users", None)
+
+    assert raised.value.code is ErrorCode.AMBIGUOUS_OBJECT
+    assert "None" not in str(raised.value)
+    assert "Users" in str(raised.value)
