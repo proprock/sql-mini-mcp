@@ -6,6 +6,7 @@ from typing import TypeVar
 
 from sqlalchemy import Engine
 from sqlalchemy.exc import DBAPIError, OperationalError, SQLAlchemyError
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
 from sql_mini_mcp.config import AppConfig, ServerConfig
 from sql_mini_mcp.db.extras import extras_for
@@ -55,21 +56,27 @@ class DatabaseService:
             return await self.registry.run(alias, database, operation)
         except DomainError:
             raise
-        except OperationalError as exc:
+        except SQLAlchemyTimeoutError as exc:
             raise DomainError(
-                ErrorCode.CONNECTION_FAILED,
-                "Could not connect to the configured database server.",
+                ErrorCode.TIMEOUT,
+                "The database operation timed out.",
                 retryable=True,
             ) from exc
         except DBAPIError as exc:
             message = str(exc.orig).casefold()
-            if "timeout" in message:
+            if "timeout" in message or "hyt00" in message or "hyt01" in message:
                 raise DomainError(
                     ErrorCode.TIMEOUT, "The database operation timed out.", retryable=True
                 ) from exc
-            if any(value in message for value in ("permission", "denied", "login failed")):
+            if any(value in message for value in ("permission", "denied", "not authorized")):
                 raise DomainError(
                     ErrorCode.ACCESS_DENIED, "The database denied this operation."
+                ) from exc
+            if isinstance(exc, OperationalError):
+                raise DomainError(
+                    ErrorCode.CONNECTION_FAILED,
+                    "Could not connect to the configured database server.",
+                    retryable=True,
                 ) from exc
             error = DomainError.unexpected()
             logger.error("Database operation failed; reference=%s", error.correlation_id)
