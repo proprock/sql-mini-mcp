@@ -355,3 +355,131 @@ def test_generated_sql_never_carries_comments() -> None:
     sql = "/* a */ SELECT /* b */ Id -- c\nFROM Users /* d */"
     assert "/*" not in validate(sql).sql
     assert "--" not in validate(sql).sql
+
+
+# --- coverage of defensive branches (hand-built ASTs) ------------------------------------------
+
+
+def _rejected_with(query: exp.Select, reason: Reason) -> None:
+    with pytest.raises(DomainError) as info:
+        validate_allowlist(query)
+    assert info.value.public_message == f"Query rejected: {reason.value}."
+
+
+def test_a_column_whose_name_is_not_an_identifier_is_rejected() -> None:
+    query = exp.select(exp.Column(this=exp.Var(this="x"))).from_("Users")
+    _rejected_with(query, Reason.COLUMN_REFERENCE_UNSUPPORTED)
+
+
+def test_a_star_outside_a_projection_is_rejected() -> None:
+    query = exp.Select(expressions=[exp.Alias(this=exp.Star(), alias=exp.to_identifier("x"))])
+    _rejected_with(query, Reason.STAR_PROJECTION_ONLY)
+
+
+def test_a_parenthesized_projection_is_rejected() -> None:
+    query = exp.Select(expressions=[exp.Paren(this=exp.column("Id"))]).from_("Users")
+    _rejected_with(query, Reason.PROJECTION_UNSUPPORTED)
+
+
+def test_a_projection_without_a_from_clause_is_accepted() -> None:
+    assert validate("SELECT 1, 'x', NULL").sql.startswith("SELECT TOP ")
+
+
+def test_table_resolution_must_match_the_query_tables() -> None:
+    query = parse_select("SELECT Id FROM Users", LIMITS)
+    with pytest.raises(DomainError) as info:
+        analyze_query(query, (), LIMITS)
+    assert info.value.public_message == f"Query rejected: {Reason.TABLE_RESOLUTION_MISMATCH.value}."
+
+
+def test_a_detached_protected_column_is_not_in_a_where_clause() -> None:
+    from sql_mini_mcp.security.lineage import AnalyzedQuery, ColumnRef, SourceColumn
+
+    detached = exp.column("Email")
+    ref = ColumnRef(detached, SourceColumn("dbo", "Users", "Email"))
+    fake = AnalyzedQuery(exp.select("1"), (), (ref,))
+    rules = [PiiRule(database="*", table="Users", columns=["Email"])]
+    with pytest.raises(DomainError) as info:
+        PiiPolicy("app", PiiConfig(rules=rules), OWN).evaluate(fake)
+    assert info.value.public_message == f"Query rejected: {Reason.PROTECTED_POSITION.value}."
+
+
+def test_a_token_prefix_surviving_generation_is_rejected() -> None:
+    result = analyzed("SELECT Id FROM Users WHERE Name = 'pii:v1:leak'")
+    with pytest.raises(DomainError) as info:
+        issue_validated_query(
+            result,
+            PolicyDecision((False,), ()),
+            alias="srv",
+            database="app",
+            max_rows=5,
+            runtime=RUNTIME,
+            limits=LIMITS,
+        )
+    assert info.value.public_message == f"Query rejected: {Reason.TOKEN_NOT_REPLACED.value}."
+
+
+# --- generated SQL is fully quoted, exact text --------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("sql", "expected"),
+    [
+        (
+            "select id, EMAIL from dbo.users u where id = 1",
+            "SELECT TOP 201 [u].[Id], [u].[Email] FROM [dbo].[Users] AS u WHERE [u].[Id] = 1",
+        ),
+        (
+            "SELECT * FROM Orders",
+            "SELECT TOP 201 [Orders].[Id], [Orders].[UserId], [Orders].[Total] FROM [dbo].[Orders]",
+        ),
+        (
+            "SELECT o.Id FROM Users u JOIN Orders o ON o.UserId = u.Id ORDER BY u.Id DESC",
+            "SELECT TOP 201 [o].[Id] FROM [dbo].[Users] AS u JOIN [dbo].[Orders] AS o "
+            "ON [o].[UserId] = [u].[Id] ORDER BY [u].[Id] DESC",
+        ),
+    ],
+)
+def test_generated_sql_is_exact_and_fully_quoted(sql: str, expected: str) -> None:
+    assert validate(sql).sql == expected
+
+
+def test_a_none_schema_from_reflection_becomes_an_empty_schema(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sql_mini_mcp.models import TableSummary
+
+    monkeypatch.setattr(
+        schema_module, "reflect_tables", lambda _connection: [TableSummary(schema=None, name="T")]
+    )
+    catalog = ReflectedCatalog(
+        sa.create_engine("sqlite://").connect(), SchemaCache(8, 60), "a", "d"
+    )
+    assert catalog.list_tables() == [("", "T")]
+
+
+# --- policy: positions that only a hand-built tree can reach --------------------------------------
+
+
+def test_a_bare_protected_column_used_as_a_predicate_is_rejected() -> None:
+    rules = [PiiRule(database="*", schema="dbo", table="Users", columns=["Name"])]
+    query = parse_select("SELECT Id FROM Users WHERE Name", LIMITS)
+    result = analyze_query(query, resolve_tables(query, Catalog()), LIMITS)
+    with pytest.raises(DomainError) as info:
+        PiiPolicy("app", PiiConfig(rules=rules), OWN).evaluate(result)
+    assert info.value.public_message == f"Query rejected: {Reason.PROTECTED_POSITION.value}."
+
+
+def test_a_protected_column_inside_an_in_list_is_not_a_token_comparison() -> None:
+    from sql_mini_mcp.security.lineage import AnalyzedQuery, ColumnRef, SourceColumn
+
+    protected = exp.column("Email", table="u")
+    other = exp.column("Id", table="u")
+    where = exp.Where(this=exp.In(this=other, expressions=[protected]))
+    query = exp.select("1")
+    query.set("where", where)
+    ref = ColumnRef(protected, SourceColumn("dbo", "Users", "Email"))
+    rules = [PiiRule(database="*", table="Users", columns=["Email"])]
+    with pytest.raises(DomainError) as info:
+        PiiPolicy("app", PiiConfig(rules=rules), OWN).evaluate(AnalyzedQuery(query, (), (ref,)))
+    assert info.value.public_message == f"Query rejected: {Reason.PROTECTED_POSITION.value}."

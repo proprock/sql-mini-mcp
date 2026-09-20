@@ -181,8 +181,6 @@ def load_config(path: str | Path, environ: Mapping[str, str] | None = None) -> A
                     raise ValueError(f"PII key for server {alias!r} must decode to 32 bytes")
                 value["pii_key"] = env[key_env]
         return AppConfig.model_validate(raw)
-    except DomainError:
-        raise
     except ValidationError as exc:
         raise DomainError(
             ErrorCode.CONFIG_ERROR,

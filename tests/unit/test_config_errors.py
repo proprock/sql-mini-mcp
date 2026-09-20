@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 from pathlib import Path
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
@@ -146,3 +147,87 @@ def test_duplicate_keys_across_aliases_are_rejected() -> None:
     servers["t"] = dict(servers["s"])
     with pytest.raises(ValidationError, match="must be unique per server alias"):
         AppConfig.model_validate(model)
+
+
+def _message(text: str, env: dict[str, str] | None = None) -> str:
+    path = Path(__import__("tempfile").mkdtemp()) / "c.yaml"
+    path.write_text(text, encoding="utf-8")
+    return _error(path, env).public_message
+
+
+def test_structure_errors_have_exact_messages() -> None:
+    assert _message("- a\n- b\n") == "Invalid configuration: configuration root must be a mapping"
+    assert (
+        _message("version: 1\nservers: []\n") == "Invalid configuration: servers must be a mapping"
+    )
+    assert _message("version: 1\nservers:\n  s: x\n") == (
+        "Invalid configuration: server 's' must be a mapping"
+    )
+    assert _message("version: 1\nservers:\n  s:\n    engine: sqlserver\n") == (
+        "Invalid configuration: server 's' requires connection_url"
+    )
+    assert _message(_yaml(url="5")).startswith("Invalid configuration:")
+
+
+def test_invalid_pii_key_values_have_exact_messages() -> None:
+    extra = "    access_level: pii_safe\n    pii_key_env: K\n"
+    assert _message(_yaml(extra=extra), {"K": "!!!not base64"}) == (
+        "Invalid configuration: PII key for server 's' is not valid base64"
+    )
+    short = base64.b64encode(bytes(8)).decode()
+    assert _message(_yaml(extra=extra), {"K": short}) == (
+        "Invalid configuration: PII key for server 's' must decode to 32 bytes"
+    )
+
+
+def test_model_level_validation_errors_are_reported() -> None:
+    def summary(model: dict[str, object]) -> str:
+        with pytest.raises(ValidationError) as info:
+            AppConfig.model_validate(model)
+        return str(info.value)
+
+    server = {"engine": "sqlserver", "connection_url": URL}
+    assert "invalid server alias '_bad'" in summary({"version": 1, "servers": {"_bad": server}})
+    assert "default_max_rows cannot exceed hard_max_rows" in summary(
+        {
+            "version": 1,
+            "runtime": {"default_max_rows": 10, "hard_max_rows": 5},
+            "servers": {"s": server},
+        }
+    )
+    other = dict(server, connection_url="mysql+pymysql://u:p@h/d")
+    assert "requires SQLAlchemy dialect 'mssql+pyodbc'" in summary(
+        {"version": 1, "servers": {"s": other}}
+    )
+    metadata_with_pii = dict(server, pii_key_env="K")
+    assert "metadata servers cannot configure" in summary(
+        {"version": 1, "servers": {"s": metadata_with_pii}}
+    )
+    pii_safe_without_keys = dict(server, access_level="pii_safe")
+    assert "pii_safe servers require pii_key_env and pii rules" in summary(
+        {"version": 1, "servers": {"s": pii_safe_without_keys}}
+    )
+
+
+def test_pii_rule_validation_errors_are_reported() -> None:
+    def summary(rule: dict[str, object]) -> str:
+        server = dict(cast(dict[str, dict[str, object]], _model("x")["servers"])["s"])
+        server["pii"] = {"rules": [rule]}
+        server["pii_key"] = base64.b64encode(bytes(32)).decode()
+        with pytest.raises(ValidationError) as info:
+            AppConfig.model_validate({"version": 1, "servers": {"s": server}})
+        return str(info.value)
+
+    base: dict[str, object] = {"database": "*", "table": "T", "columns": ["c"]}
+    assert "wildcards are allowed only in pii rule database" in summary(dict(base, table="T*"))
+    assert "wildcards are allowed only in pii rule database" in summary(dict(base, schema="s*"))
+    assert "database must be an exact name or '*'" in summary(dict(base, database="a*"))
+    assert "pii rule columns must be unique" in summary(dict(base, columns=["c", "C"]))
+
+
+def test_non_ascii_values_survive_loading(tmp_path: Path) -> None:
+    path = tmp_path / "config.yaml"
+    url = "mssql+pyodbc://u:päss中@sql/master?driver=x"
+    path.write_bytes(_yaml(url).encode("utf-8"))
+    config = load_config(path, {})
+    assert config.servers["s"].connection_url.get_secret_value() == url
