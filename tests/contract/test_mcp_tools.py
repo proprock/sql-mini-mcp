@@ -63,10 +63,12 @@ def test_metadata_tool_contracts_and_structured_output() -> None:
                 assert tool.annotations.read_only_hint is True
                 assert tool.annotations.open_world_hint is False
             table_list = next(tool for tool in listing.tools if tool.name == "list_tables")
-            table_item = table_list.output_schema["properties"]["tables"]["items"]
+            output_schema = table_list.output_schema
+            assert output_schema is not None
+            table_item = output_schema["properties"]["tables"]["items"]
             if "$ref" in table_item:
                 definition_name = table_item["$ref"].rsplit("/", 1)[-1]
-                table_item = table_list.output_schema["$defs"][definition_name]
+                table_item = output_schema["$defs"][definition_name]
             assert set(table_item["properties"]) == {"schema", "name"}
             assert set(table_item["required"]) == {"schema", "name"}
             result = await client.call_tool("list_servers")

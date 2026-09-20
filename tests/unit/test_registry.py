@@ -139,6 +139,13 @@ def test_registry_configures_pool_database_and_cursor_timeout(
         "pool_pre_ping": True,
         "pool_use_lifo": True,
     }
+    connect_callback = callbacks["connect"]
+    dbapi_connection = Mock(timeout=0)
+    connect_callback(dbapi_connection, None)
+    assert dbapi_connection.timeout == 30
+
+    connect_callback(object(), None)
+
     callback = callbacks["before_cursor_execute"]
     cursor = Mock(timeout=0)
     callback(None, cursor, "SELECT secret", {"password": "hidden"}, None, False)

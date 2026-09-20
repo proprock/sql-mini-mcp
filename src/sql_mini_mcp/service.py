@@ -72,6 +72,14 @@ class DatabaseService:
                 raise DomainError(
                     ErrorCode.ACCESS_DENIED, "The database denied this operation."
                 ) from exc
+            if any(
+                value in message for value in ("cannot open database", "(4060)", "08001", "08004")
+            ):
+                raise DomainError(
+                    ErrorCode.CONNECTION_FAILED,
+                    "Could not connect to the configured database server.",
+                    retryable=True,
+                ) from exc
             if isinstance(exc, OperationalError):
                 raise DomainError(
                     ErrorCode.CONNECTION_FAILED,

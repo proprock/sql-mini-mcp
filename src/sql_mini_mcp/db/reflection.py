@@ -80,8 +80,15 @@ def get_table_definition(
     inspector = inspect(connection)
     primary_key = inspector.get_pk_constraint(table, schema=schema)
     foreign_keys = inspector.get_foreign_keys(table, schema=schema)
-    unique_constraints = inspector.get_unique_constraints(table, schema=schema)
     indexes = inspector.get_indexes(table, schema=schema)
+    try:
+        unique_constraints = inspector.get_unique_constraints(table, schema=schema)
+    except NotImplementedError:
+        unique_constraints = [
+            {"name": item.get("name"), "column_names": item.get("column_names")}
+            for item in indexes
+            if item.get("unique")
+        ]
     return TableDefinition(
         schema_=schema,
         name=table,
@@ -103,7 +110,7 @@ def get_table_definition(
         ],
         unique_constraints=[
             UniqueConstraintDefinition(
-                name=item.get("name"),
+                name=None if item.get("name") is None else str(item["name"]),
                 columns=[str(name) for name in item.get("column_names") or []],
             )
             for item in unique_constraints

@@ -40,6 +40,11 @@ class EngineRegistry:
         )
         timeout = self._config.runtime.statement_timeout_seconds
 
+        @event.listens_for(engine, "connect")
+        def set_connection_timeout(dbapi_connection: Any, _record: Any) -> None:
+            if hasattr(dbapi_connection, "timeout"):
+                dbapi_connection.timeout = timeout
+
         @event.listens_for(engine, "before_cursor_execute")
         def set_statement_timeout(
             _connection: Any,

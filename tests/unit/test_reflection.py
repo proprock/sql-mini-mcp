@@ -194,3 +194,39 @@ def test_get_table_definition_normalizes_complete_inspector_payload(
         "unique": False,
         "expressions": ["lower([DisplayName])"],
     }
+
+
+def test_get_table_definition_derives_unique_constraints_when_dialect_omits_api(
+    monkeypatch: pytest.MonkeyPatch, fake_connection: Connection
+) -> None:
+    class SqlServerInspector(FakeInspector):
+        def get_unique_constraints(
+            self, table: str, schema: str | None = None
+        ) -> list[dict[str, Any]]:
+            assert (schema, table) == ("dbo", "Orders")
+            raise NotImplementedError
+
+        def get_indexes(self, table: str, schema: str | None = None) -> list[dict[str, Any]]:
+            assert (schema, table) == ("dbo", "Orders")
+            return [
+                {
+                    "name": "UQ_Orders_Code",
+                    "column_names": ["TenantId", "Code"],
+                    "unique": True,
+                },
+                {
+                    "name": "IX_Orders_Name",
+                    "column_names": ["DisplayName"],
+                    "unique": False,
+                },
+            ]
+
+    monkeypatch.setattr(
+        "sql_mini_mcp.db.reflection.inspect", lambda _connection: SqlServerInspector()
+    )
+
+    definition = get_table_definition(fake_connection, "dbo", "Orders")
+
+    assert [item.model_dump() for item in definition.unique_constraints] == [
+        {"name": "UQ_Orders_Code", "columns": ["TenantId", "Code"]}
+    ]

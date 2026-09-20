@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pytest
 from pydantic import SecretStr
-from sqlalchemy.exc import DBAPIError, OperationalError
+from sqlalchemy.exc import DBAPIError, OperationalError, ProgrammingError
 from sqlalchemy.exc import TimeoutError as SqlAlchemyTimeoutError
 
 from sql_mini_mcp.config import AppConfig, RuntimeConfig, ServerConfig
@@ -171,6 +171,14 @@ def test_get_stored_procedure_handles_ambiguity_hidden_and_oversized_definition(
         (
             OperationalError(
                 "SELECT secret", {"password": "hidden"}, Exception("08001 connection failed")
+            ),
+            ErrorCode.CONNECTION_FAILED,
+        ),
+        (
+            ProgrammingError(
+                "SELECT secret",
+                {"password": "hidden"},
+                Exception("42000 Cannot open database requested by the login. (4060)"),
             ),
             ErrorCode.CONNECTION_FAILED,
         ),
