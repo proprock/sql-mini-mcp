@@ -144,20 +144,71 @@ servers:
         load_config(path, env)
 
 
-def test_rejects_mysql_until_milestone_3(tmp_path: Path) -> None:
+@pytest.mark.parametrize("engine", ["mysql", "mariadb"])
+def test_accepts_mysql_family_metadata_servers(tmp_path: Path, engine: str) -> None:
     path = _write(
         tmp_path,
-        """
+        f"""
 version: 1
 servers:
-  future:
-    engine: mysql
+  one:
+    engine: {engine}
     connection_url: mysql+pymysql://user:password@localhost/database
+""",
+    )
+
+    assert load_config(path, {}).servers["one"].engine == engine
+
+
+@pytest.mark.parametrize(
+    ("engine", "url"),
+    [
+        ("mysql", "mssql+pyodbc://u:p@h/d?driver=x"),
+        ("mariadb", "mssql+pyodbc://u:p@h/d?driver=x"),
+        ("sqlserver", "mysql+pymysql://u:p@h/d"),
+    ],
+)
+def test_rejects_engine_driver_mismatch(tmp_path: Path, engine: str, url: str) -> None:
+    path = _write(
+        tmp_path,
+        f"""
+version: 1
+servers:
+  one:
+    engine: {engine}
+    connection_url: {url}
 """,
     )
 
     with pytest.raises(DomainError, match="CONFIG_ERROR"):
         load_config(path, {})
+
+
+@pytest.mark.parametrize("engine", ["mysql", "mariadb"])
+def test_rejects_pii_safe_for_mysql_family_until_dialect_support(
+    tmp_path: Path, engine: str
+) -> None:
+    path = _write(
+        tmp_path,
+        f"""
+version: 1
+servers:
+  one:
+    engine: {engine}
+    access_level: pii_safe
+    connection_url: mysql+pymysql://user:password@localhost/database
+    pii_key_env: KEY
+    pii:
+      rules:
+        - database: "*"
+          table: users
+          columns: [email]
+""",
+    )
+    env = {"KEY": base64.b64encode(b"x" * 32).decode()}
+
+    with pytest.raises(DomainError, match="CONFIG_ERROR"):
+        load_config(path, env)
 
 
 @pytest.mark.parametrize(

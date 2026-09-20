@@ -69,10 +69,17 @@ class PiiConfig(BaseModel):
     rules: list[PiiRule] = Field(min_length=1)
 
 
+_DRIVERNAMES = {
+    "sqlserver": "mssql+pyodbc",
+    "mysql": "mysql+pymysql",
+    "mariadb": "mysql+pymysql",
+}
+
+
 class ServerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    engine: Literal["sqlserver"]
+    engine: Literal["sqlserver", "mysql", "mariadb"]
     access_level: Literal["metadata", "pii_safe"] = "metadata"
     connection_url: SecretStr
     pii_key_env: str | None = Field(default=None, pattern=r"^[A-Z_][A-Z0-9_]*$")
@@ -82,13 +89,15 @@ class ServerConfig(BaseModel):
     @model_validator(mode="after")
     def validate_security_shape(self) -> ServerConfig:
         if self.access_level == "pii_safe":
+            if self.engine != "sqlserver":
+                raise ValueError(f"pii_safe is not supported for engine {self.engine!r}")
             if not self.pii_key_env or self.pii is None:
                 raise ValueError("pii_safe servers require pii_key_env and pii rules")
         elif self.pii_key_env is not None or self.pii is not None:
             raise ValueError("metadata servers cannot configure pii_key_env or pii rules")
 
         driver = make_url(self.connection_url.get_secret_value()).drivername
-        expected = "mssql+pyodbc"
+        expected = _DRIVERNAMES[self.engine]
         if driver != expected:
             raise ValueError(f"engine {self.engine!r} requires SQLAlchemy dialect {expected!r}")
         return self

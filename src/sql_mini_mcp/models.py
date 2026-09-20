@@ -11,7 +11,7 @@ class OutputModel(BaseModel):
 
 class ServerSummary(OutputModel):
     name: str
-    engine: Literal["sqlserver"]
+    engine: Literal["sqlserver", "mysql", "mariadb"]
     access_level: Literal["metadata", "pii_safe"]
 
 
