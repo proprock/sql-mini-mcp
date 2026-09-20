@@ -28,4 +28,8 @@ def extras_for(engine: str) -> DatabaseExtras:
         from sql_mini_mcp.db.sqlserver import SqlServerExtras
 
         return SqlServerExtras()
+    if engine in ("mysql", "mariadb"):
+        from sql_mini_mcp.db.mysql import MySqlExtras
+
+        return MySqlExtras()
     raise ValueError(f"unsupported engine {engine!r}")
