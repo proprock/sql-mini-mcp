@@ -99,3 +99,26 @@ class StoredProcedureDefinition(OutputModel):
     name: str
     definition: str | None
     definition_available: bool
+
+
+ResultEncoding = Literal["json", "token", "decimal", "date", "time", "datetime", "uuid", "base64"]
+
+
+class ColumnSource(OutputModel):
+    schema_: str | None = Field(alias="schema")
+    table: str
+    column: str
+
+
+class SqlColumn(OutputModel):
+    name: str
+    source: ColumnSource | None
+    protected: bool
+    encoding: ResultEncoding
+
+
+class SqlResult(OutputModel):
+    columns: list[SqlColumn]
+    rows: list[list[Any]]
+    row_count: int
+    truncated: bool

@@ -10,6 +10,7 @@ from typing import Any, Protocol
 from uuid import UUID
 
 from sql_mini_mcp.errors import DomainError, ErrorCode
+from sql_mini_mcp.models import ResultEncoding
 from sql_mini_mcp.security.lineage import SourceColumn
 from sql_mini_mcp.security.tokens import TokenCodec
 from sql_mini_mcp.security.validated_query import ValidatedQuery
@@ -34,7 +35,7 @@ class ResultColumn:
     name: str
     source: SourceColumn | None
     protected: bool
-    encoding: str
+    encoding: ResultEncoding
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,7 +53,7 @@ def _unsupported_result() -> DomainError:
     )
 
 
-def _encode(value: Any) -> tuple[Any, str]:
+def _encode(value: Any) -> tuple[Any, ResultEncoding]:
     """Return the JSON-safe form and encoding name of one non-null, unprotected value."""
     kind = type(value)
     if kind in (str, bool, int):
@@ -93,7 +94,7 @@ def execute_validated(
             raise _unsupported_result()
         fetched = result.fetchmany(query.max_rows + 1)
         truncated = len(fetched) > query.max_rows
-        encodings: list[str | None] = [None] * len(query.outputs)
+        encodings: list[ResultEncoding | None] = [None] * len(query.outputs)
         rows: list[tuple[Any, ...]] = []
         for raw in fetched[: query.max_rows]:
             cells: list[Any] = []
