@@ -56,11 +56,19 @@ try {
         "?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=yes"
     ) -f $encodedPassword, $port
 
+    $auditDir = Join-Path ([IO.Path]::GetTempPath()) "sql-mini-mcp-audit"
+    Remove-Item $auditDir -Recurse -Force -ErrorAction SilentlyContinue
+    $env:SQL_MINI_MCP_AUDIT_DIR = $auditDir
+
     uv run pytest tests/integration/sqlserver -m integration -v @PytestArgs
     $exitCode = $LASTEXITCODE
+    if (Test-Path $auditDir) {
+        Write-Host "Audit artifacts: $auditDir"
+    }
 }
 finally {
     Remove-Item Env:SQL_MINI_MCP_TEST_SQLSERVER_URL -ErrorAction SilentlyContinue
+    Remove-Item Env:SQL_MINI_MCP_AUDIT_DIR -ErrorAction SilentlyContinue
     Remove-Item Env:SQL_MINI_MCP_DOCKER_SA_PASSWORD -ErrorAction SilentlyContinue
 }
 

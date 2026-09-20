@@ -1,0 +1,241 @@
+# Adversarial SQL corpus: syntax-level attacks. Every case must be rejected with `code`
+# (default QUERY_REJECTED) and must never reach the database. Templates such as {{TOKEN_OWN}} and
+# {{IN_LIST:501}} are expanded by the runner (see test_adversarial_corpus.py).
+
+# --- stacked statements, separators, comments -------------------------------------------------
+- name: stacked drop
+  sql: "SELECT Id FROM Users; DROP TABLE Canary"
+  reason: a second statement must never be accepted
+- name: stacked delete leading
+  sql: "DELETE FROM Canary; SELECT Id FROM Users"
+  reason: first statement is not a SELECT
+- name: stacked with block comment before separator
+  sql: "SELECT Id FROM Users /**/;/**/ DROP TABLE Canary"
+  reason: comments must not hide a separator
+- name: stacked with line comment newline
+  sql: "SELECT Id FROM Users --\n; DROP TABLE Canary"
+  reason: a line comment ends at the newline
+- name: nested block comment hides statement
+  sql: "SELECT Id FROM Users /* /* */ ; DROP TABLE Canary /* */"
+  reason: T-SQL nests block comments, parsers may disagree
+- name: nested comment leaks into generated sql
+  sql: "SELECT Id /* /* */ FROM Users WHERE Name = 'p*/ ; DROP TABLE Canary; --'"
+  reason: sqlglot and SQL Server disagree on comment nesting, so comments must never be emitted
+- name: go batch separator
+  sql: "SELECT Id FROM Users\nGO\nDROP TABLE Canary"
+  reason: GO is a client batch separator, not SQL
+- name: multiple semicolons then statement
+  sql: "SELECT Id FROM Users;;; DROP TABLE Canary"
+  reason: empty statements must not mask a real one
+- name: semicolon prefix statement
+  sql: "; DROP TABLE Canary; SELECT Id FROM Users"
+  reason: leading separator
+- name: select with trailing exec
+  sql: "SELECT Id FROM Users; EXEC xp_cmdshell 'dir'"
+  reason: stacked exec
+- name: comment only
+  sql: "-- SELECT Id FROM Users"
+  reason: no statement
+- name: mysql style comment
+  sql: "SELECT Id FROM Users # ; DROP TABLE Canary"
+  reason: "'#' starts a temp-table identifier in T-SQL, not a comment"
+- name: unterminated block comment
+  sql: "SELECT Id FROM Users /* ; DROP TABLE Canary"
+  reason: malformed input
+- name: unterminated string
+  sql: "SELECT Id FROM Users WHERE Name = 'x; DROP TABLE Canary"
+  reason: malformed input
+- name: string terminator injection
+  sql: "SELECT Id FROM Users WHERE Name = 'x'; DROP TABLE Canary; --'"
+  reason: classic quote break-out
+- name: empty
+  sql: ""
+  reason: no statement
+- name: whitespace only
+  sql: " \n\t "
+  reason: no statement
+- name: null byte in statement
+  sql: "SELECT Id FROM Users;\u0000 DROP TABLE Canary"
+  reason: control characters must not split statements
+
+# --- unicode and quoted identifiers -----------------------------------------------------------
+- name: fullwidth select keyword
+  sql: "\uff33\uff25\uff2c\uff25\uff23\uff34 Id FROM Users"
+  reason: homoglyph keyword is not SELECT
+- name: zero width space in keyword
+  sql: "SEL\u200bECT Id FROM Users"
+  reason: invisible characters must not form a keyword
+- name: bidi override in identifier
+  sql: "SELECT [Id\u202e] FROM Users"
+  reason: unknown column after normalization
+- name: dotless i column
+  sql: "SELECT \u0131d FROM Users"
+  reason: case folding must not map dotless i to i
+- name: kelvin sign table name
+  sql: "SELECT Id FROM \u212aUsers"
+  reason: casefold of KELVIN SIGN must not match another object
+- name: bracket escape breakout
+  sql: "SELECT [Id]] FROM Users; DROP TABLE Canary; --] FROM Users"
+  reason: "]] is an escaped bracket, not the end of the identifier"
+- name: quoted identifier with semicolon
+  sql: "SELECT [Id; DROP TABLE Canary] FROM Users"
+  reason: unknown column
+- name: double quoted identifier breakout
+  sql: "SELECT \"Id\"\"; DROP TABLE Canary; --\" FROM Users"
+  reason: quoted identifier escape
+- name: bracket table named like keyword
+  sql: "SELECT Id FROM [Users; DROP TABLE Canary]"
+  reason: unknown table
+- name: nul in bracket identifier
+  sql: "SELECT [Id\u0000] FROM Users"
+  reason: unknown column
+- name: nchar literal predicate on unprotected column with breakout
+  sql: "SELECT Id FROM Users WHERE Name = N'x'; DROP TABLE Canary"
+  reason: stacked statement after national literal
+- name: hex literal
+  sql: "SELECT 0x44524f50 FROM Users"
+  reason: binary literals are not supported
+- name: unicode escape style string
+  sql: "SELECT U&'\\0041' FROM Users"
+  reason: not T-SQL literal syntax
+- name: emoji identifier
+  sql: "SELECT [\U0001f600] FROM Users"
+  reason: unknown column
+
+# --- cross database, four part, system objects ------------------------------------------------
+- name: cross database three part
+  sql: "SELECT Id FROM other.dbo.Users"
+  reason: catalog qualifier
+- name: cross database bracketed
+  sql: "SELECT Id FROM [other].[dbo].[Users]"
+  reason: catalog qualifier
+- name: four part linked server
+  sql: "SELECT Id FROM ls.other.dbo.Users"
+  reason: linked server name
+- name: four part bracketed
+  sql: "SELECT Id FROM [ls].[other].[dbo].[Users]"
+  reason: linked server name
+- name: master system table
+  sql: "SELECT name FROM master.sys.databases"
+  reason: cross database system object
+- name: sys schema
+  sql: "SELECT name FROM sys.objects"
+  reason: system schema is not a user table
+- name: information schema
+  sql: "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES"
+  reason: system schema
+- name: sys columns lookup
+  sql: "SELECT name FROM sys.columns"
+  reason: system schema
+- name: syslogins
+  sql: "SELECT name FROM master..syslogins"
+  reason: double-dot cross database shorthand
+- name: tempdb object
+  sql: "SELECT * FROM tempdb.dbo.Foo"
+  reason: cross database
+- name: dbo schema on missing table
+  sql: "SELECT Id FROM dbo.DoesNotExist"
+  reason: not found by reflection
+- name: current database qualified with wrong schema
+  sql: "SELECT Id FROM nosuchschema.Users"
+  reason: not found by reflection
+- name: column with catalog path
+  sql: "SELECT other.dbo.Users.Id FROM Users"
+  reason: multi-part column reference
+
+# --- linked servers and remote data access ----------------------------------------------------
+- name: openrowset
+  sql: "SELECT * FROM OPENROWSET('SQLNCLI', 'Server=x;', 'SELECT 1')"
+  reason: remote data access
+- name: openrowset bulk
+  sql: "SELECT * FROM OPENROWSET(BULK 'C:\\\\x.txt', SINGLE_CLOB) AS t"
+  reason: file access
+- name: openquery
+  sql: "SELECT * FROM OPENQUERY(ls, 'SELECT 1')"
+  reason: linked server passthrough
+- name: opendatasource
+  sql: "SELECT * FROM OPENDATASOURCE('SQLNCLI', 'Data Source=x').db.dbo.t"
+  reason: remote data access
+- name: openxml
+  sql: "SELECT * FROM OPENXML(1, '/x')"
+  reason: table function
+- name: at at linked exec
+  sql: "EXEC ('SELECT 1') AT ls"
+  reason: exec at linked server
+
+# --- side effects ----------------------------------------------------------------------------
+- name: select into new table
+  sql: "SELECT Id INTO NewTable FROM Users"
+  reason: creates an object
+- name: select into temp
+  sql: "SELECT Id INTO #t FROM Users"
+  reason: creates an object
+- name: insert select
+  sql: "INSERT INTO Canary SELECT Id FROM Users"
+  reason: write
+- name: update
+  sql: "UPDATE Canary SET Id = 1"
+  reason: write
+- name: delete
+  sql: "DELETE FROM Canary"
+  reason: write
+- name: merge
+  sql: "MERGE Canary AS t USING Users AS s ON t.Id = s.Id WHEN MATCHED THEN DELETE"
+  reason: write
+- name: truncate
+  sql: "TRUNCATE TABLE Canary"
+  reason: write
+- name: drop
+  sql: "DROP TABLE Canary"
+  reason: ddl
+- name: create
+  sql: "CREATE TABLE X (Id int)"
+  reason: ddl
+- name: alter
+  sql: "ALTER TABLE Canary ADD X int"
+  reason: ddl
+- name: grant
+  sql: "GRANT SELECT ON Users TO public"
+  reason: permission change
+- name: exec proc
+  sql: "EXEC sp_who"
+  reason: procedure call
+- name: exec dynamic string
+  sql: "EXEC ('DROP TABLE Canary')"
+  reason: dynamic sql
+- name: execute keyword
+  sql: "EXECUTE sp_executesql N'DROP TABLE Canary'"
+  reason: dynamic sql
+- name: xp cmdshell
+  sql: "EXEC xp_cmdshell 'whoami'"
+  reason: os command
+- name: backup
+  sql: "BACKUP DATABASE app TO DISK = 'x'"
+  reason: side effect
+- name: use database
+  sql: "USE master"
+  reason: context switch
+- name: set option
+  sql: "SET NOCOUNT ON"
+  reason: session change
+- name: begin transaction
+  sql: "BEGIN TRAN"
+  reason: transaction control
+- name: waitfor
+  sql: "WAITFOR DELAY '0:0:30'"
+  reason: denial of service
+- name: shutdown
+  sql: "SHUTDOWN"
+  reason: server control
+- name: declare and select
+  sql: "DECLARE @x int = 1; SELECT @x"
+  reason: variables
+- name: raiserror
+  sql: "RAISERROR('x', 16, 1)"
+  reason: side effect
+- name: print
+  sql: "PRINT 'x'"
+  reason: not a select
+- name: select with output clause style
+  sql: "SELECT Id FROM Users OUTPUT INSERTED.Id"
+  reason: not select syntax

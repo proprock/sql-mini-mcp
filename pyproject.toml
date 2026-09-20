@@ -1,6 +1,6 @@
 [project]
 name = "sql-mini-mcp"
-version = "1.0.0"
+version = "1.1.0"
 description = "Minimal, read-only, PII-safe MCP server for SQL databases."
 readme = "README.md"
 requires-python = ">=3.12,<3.15"
@@ -51,10 +51,21 @@ include = [
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers"
 testpaths = ["tests"]
+pythonpath = ["tests/security"]
 markers = [
     "integration: requires a live database",
     "deep: expensive security verification",
 ]
+
+[tool.mutmut]
+source_paths = ["src/sql_mini_mcp"]
+also_copy = ["server.json", "README.md"]
+only_mutate = ["*security/*.py", "*config.py"]
+mutate_only_covered_lines = true
+pytest_add_cli_args = ["-q", "-m", "not integration and not deep", "-p", "no:cacheprovider"]
+pytest_add_cli_args_test_selection = ["tests/unit", "tests/security", "tests/contract"]
+timeout_multiplier = 3.0
+timeout_constant = 5.0
 
 [tool.coverage.run]
 branch = true
@@ -72,3 +83,6 @@ quote-style = "double"
 
 [tool.ty.src]
 include = ["src", "tests"]
+
+[tool.ty.environment]
+extra-paths = ["tests/security"]

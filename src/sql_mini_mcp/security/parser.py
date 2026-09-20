@@ -7,6 +7,7 @@ from sqlglot import exp
 
 from sql_mini_mcp.config import RuntimeConfig
 from sql_mini_mcp.errors import DomainError, ErrorCode
+from sql_mini_mcp.security.reasons import Reason
 
 DIALECT = "tsql"
 
@@ -28,24 +29,27 @@ class ParserLimits:
         )
 
 
-def reject(message: str) -> DomainError:
-    return DomainError(
-        ErrorCode.QUERY_REJECTED,
-        f"Query rejected: {message}",
-        "Rewrite the operation as a single, simpler SELECT query.",
-    )
+REJECT_HINT = "Rewrite the operation as a single, simpler SELECT query."
+
+
+def reject(reason: Reason, detail: str | None = None) -> DomainError:
+    """Build the QUERY_REJECTED error; only a fixed Reason (plus an optional name) is accepted."""
+    if not isinstance(reason, Reason):
+        raise TypeError("reject() takes a Reason")
+    text = str(reason) if detail is None else f"{reason}: {detail}"
+    return DomainError(ErrorCode.QUERY_REJECTED, f"Query rejected: {text}.", REJECT_HINT)
 
 
 def check_limits(query: exp.Expression, limits: ParserLimits) -> None:
     """Enforce AST size limits; also used again after transformations."""
     for count, _ in enumerate(query.walk(), start=1):
         if count > limits.max_ast_nodes:
-            raise reject("the query exceeds the configured complexity limit.")
+            raise reject(Reason.LIMIT_NODES)
     if sum(1 for _ in query.find_all(exp.Join)) > limits.max_joins:
-        raise reject("the query has too many joins.")
+        raise reject(Reason.LIMIT_JOINS)
     for node in query.find_all(exp.In):
         if len(node.expressions) > limits.max_in_list_items:
-            raise reject("an IN list exceeds the configured item limit.")
+            raise reject(Reason.LIMIT_IN_LIST)
 
 
 _COMPARISONS = (exp.EQ, exp.NEQ, exp.GT, exp.GTE, exp.LT, exp.LTE)
@@ -95,79 +99,86 @@ def _check_node(node: exp.Expr, allow_placeholders: bool) -> None:
     elif kind in _ALLOWED_ARGS:
         allowed_args = _ALLOWED_ARGS[kind]
     else:
-        raise reject(f"{kind.__name__} is not supported.")
+        raise reject(Reason.NODE_UNSUPPORTED, kind.__name__)
     for name, value in node.args.items():
         if name not in allowed_args and not _is_empty(value):
-            raise reject(f"{kind.__name__} option {name!r} is not supported.")
+            raise reject(Reason.OPTION_UNSUPPORTED, f"{kind.__name__}.{name}")
 
     if isinstance(node, exp.Table):
         name = node.this
         if not isinstance(name, exp.Identifier) or str(name.this).startswith(("#", "@")):
-            raise reject("only base tables of the current database are supported.")
+            raise reject(Reason.TABLE_UNSUPPORTED)
     elif isinstance(node, exp.Column):
         if not isinstance(node.this, (exp.Identifier, exp.Star)):
-            raise reject("unsupported column reference.")
+            raise reject(Reason.COLUMN_REFERENCE_UNSUPPORTED)
     elif isinstance(node, exp.Count):
         if not isinstance(node.this, exp.Star):
-            raise reject("only COUNT(*) is supported.")
+            raise reject(Reason.COUNT_STAR_ONLY)
     elif isinstance(node, exp.Star):
         if not isinstance(node.parent, (exp.Select, exp.Column, exp.Count)):
-            raise reject("* is supported only as a projection.")
+            raise reject(Reason.STAR_PROJECTION_ONLY)
     elif isinstance(node, exp.Join):
         if not isinstance(node.this, exp.Table) or node.args.get("on") is None:
-            raise reject("JOIN requires a table and an explicit ON expression.")
+            raise reject(Reason.JOIN_NEEDS_ON)
         if node.side not in {"", "LEFT"} or node.kind not in {"", "INNER"}:
-            raise reject("only INNER JOIN and LEFT JOIN are supported.")
+            raise reject(Reason.JOIN_TYPE_UNSUPPORTED)
     elif isinstance(node, exp.Is):
         if not isinstance(node.expression, exp.Null):
-            raise reject("IS is supported only with NULL.")
+            raise reject(Reason.IS_NULL_ONLY)
     elif isinstance(node, exp.Neg):
         if not _is_numeric_literal(node.this):
-            raise reject("negation is supported only for numeric literals.")
+            raise reject(Reason.NEGATION_NUMERIC_ONLY)
     elif isinstance(node, exp.Limit):
         value = node.expression
         if not _is_numeric_literal(value) or not str(value.this).isdigit():
-            raise reject("TOP must be a non-negative integer literal.")
+            raise reject(Reason.TOP_INTEGER_ONLY)
     elif isinstance(node, exp.Ordered):
         if not isinstance(node.this, exp.Column) or isinstance(node.this.this, exp.Star):
-            raise reject("ORDER BY supports only direct columns.")
+            raise reject(Reason.ORDER_DIRECT_COLUMNS_ONLY)
     elif isinstance(node, exp.In):
         if not isinstance(node.this, exp.Column) or not all(
             isinstance(item, (exp.Literal, exp.Neg, exp.Placeholder)) for item in node.expressions
         ):
-            raise reject("IN supports a column and a list of literals.")
+            raise reject(Reason.IN_LITERALS_ONLY)
     elif isinstance(node, _COMPARISONS):
         for side in (node.this, node.expression):
             if isinstance(side, exp.Star):
-                raise reject("* cannot be compared.")
+                raise reject(Reason.STAR_COMPARISON)
 
 
 def validate_allowlist(query: exp.Expression, *, allow_placeholders: bool = False) -> None:
     """Fail closed on any node type, argument, or shape outside the supported subset."""
     if not isinstance(query, exp.Select):
-        raise reject("only SELECT statements are supported.")
+        raise reject(Reason.SELECT_ONLY)
     for node in query.walk():
         _check_node(node, allow_placeholders)
     for projection in query.expressions:
         if not isinstance(projection, _PROJECTIONS):
-            raise reject("unsupported projection.")
+            raise reject(Reason.PROJECTION_UNSUPPORTED)
+
+
+def strip_comments(query: exp.Expression) -> None:
+    """Drop caller comments so no caller-controlled text is ever emitted into generated SQL."""
+    for node in query.walk():
+        node.pop_comments()
 
 
 def parse_select(sql: str, limits: ParserLimits) -> exp.Select:
     """Parse exactly one root SELECT; any failure becomes QUERY_REJECTED."""
     if len(sql) > limits.max_sql_chars:
-        raise reject("the SQL exceeds the configured length limit.")
+        raise reject(Reason.LIMIT_CHARS)
     try:
         statements = [s for s in sqlglot.parse(sql, dialect=DIALECT) if s is not None]
         if len(statements) != 1:
-            raise reject("exactly one statement is required.")
+            raise reject(Reason.ONE_STATEMENT)
         query = statements[0]
         if not isinstance(query, exp.Select):
-            raise reject("only SELECT statements are supported.")
+            raise reject(Reason.SELECT_ONLY)
         check_limits(query, limits)
         validate_allowlist(query)
+        strip_comments(query)
     except DomainError:
         raise
     except Exception as exc:
-        raise reject("the SQL could not be parsed.") from exc
+        raise reject(Reason.PARSE_FAILED) from exc
     return query

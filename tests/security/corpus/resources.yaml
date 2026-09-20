@@ -1,0 +1,42 @@
+# Adversarial SQL corpus: resource exhaustion. Limits are the RuntimeConfig defaults
+# (65536 chars, 2000 AST nodes, 8 joins, 500 IN items).
+
+- name: oversized sql text
+  sql: "SELECT Id FROM Users{{PAD:70000}}"
+  reason: exceeds max_sql_chars
+- name: sql exactly over the limit by one
+  sql: "SELECT Id FROM Users{{PAD:65517}}"
+  reason: 65537 characters
+- name: deeply nested parentheses
+  sql: "SELECT Id FROM Users WHERE {{NEST:3000}}"
+  reason: nesting depth and node count
+- name: very deeply nested parentheses
+  sql: "SELECT {{NEST:20000}} FROM Users"
+  reason: parser recursion
+- name: in list over the limit
+  sql: "SELECT Id FROM Users WHERE Id IN ({{IN_LIST:501}})"
+  reason: exceeds max_in_list_items
+- name: many in lists
+  sql: "SELECT Id FROM Users WHERE Id IN ({{IN_LIST:400}}) AND Id IN ({{IN_LIST:400}}) AND Id IN ({{IN_LIST:400}}) AND Id IN ({{IN_LIST:400}}) AND Id IN ({{IN_LIST:400}})"
+  reason: exceeds max_ast_nodes
+- name: too many joins
+  sql: "SELECT u.Id FROM Users u{{JOINS:9}}"
+  reason: exceeds max_joins
+- name: many projections
+  sql: "SELECT {{REPEAT:Id, :1100}}Id FROM Users"
+  reason: exceeds max_ast_nodes
+- name: long or chain
+  sql: "SELECT Id FROM Users WHERE {{REPEAT:Id = 1 OR :1100}}Id = 1"
+  reason: exceeds max_ast_nodes
+- name: long and chain
+  sql: "SELECT Id FROM Users WHERE {{REPEAT:Id = 1 AND :1100}}Id = 1"
+  reason: exceeds max_ast_nodes
+- name: huge string literal
+  sql: "SELECT Id FROM Users WHERE Name = '{{PAD_CHAR:a:70000}}'"
+  reason: exceeds max_sql_chars
+- name: huge identifier
+  sql: "SELECT [{{PAD_CHAR:a:70000}}] FROM Users"
+  reason: exceeds max_sql_chars
+- name: many statements
+  sql: "{{REPEAT:SELECT 1; :5000}}"
+  reason: more than one statement and too long

@@ -76,7 +76,7 @@ or
 pip install sql-mini-mcp
 ```
 
-Pin a version when you want a fixed surface: `uvx sql-mini-mcp==1.0.0`.
+Pin a version when you want a fixed surface: `uvx sql-mini-mcp==1.1.0`.
 
 Requires Python 3.12+, [uv](https://docs.astral.sh/uv/) (or `pip`), and
 [Microsoft ODBC Driver 18 for SQL Server](https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server).

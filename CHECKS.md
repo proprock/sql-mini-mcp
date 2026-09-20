@@ -84,4 +84,37 @@ running a subset:
 uv run pytest tests/unit tests/contract tests/security -q
 ```
 
-The deep, mutation, and writable-fixture gates belong to Milestone 2B and are not defined yet.
+### Security gates (Milestone 2B)
+
+The fast suite includes the adversarial corpus (`tests/security/corpus/*.yaml`, every case must
+fail with its expected code and never reach the database) and the Hypothesis properties under the
+deterministic `security-fast` profile (about 200 examples per property).
+
+Run before a milestone that changes `execute_sql` is closed:
+
+```powershell
+uv run pytest tests/unit tests/contract tests/security -m "not deep"
+uv run pytest tests/security -m deep
+```
+
+The deep run uses the randomized `security-deep` profile (3000 examples per property). A failure
+prints an `@reproduce_failure` blob; pin a run with `--hypothesis-seed=N`. Move every minimized
+counterexample into the corpus as a regression case.
+
+Mutation testing runs on Linux or WSL only, in a clone on the Linux filesystem (not `/mnt/c`):
+
+```bash
+git clone <repo> ~/smm-mut && cd ~/smm-mut
+uv sync --all-groups --locked
+HYPOTHESIS_PROFILE=security-mutation uv run mutmut run
+uv run mutmut results
+uv run mutmut show <mutant>
+```
+
+Every survivor is either killed by a new test or recorded as equivalent in `SECURITY.md` with a
+proof. Message wording is pinned through the fixed `Reason` catalog, so mutation of a message
+string is not accepted as equivalent. An interrupted run is not evidence.
+
+The writable-credential attack fixture (`tests/integration/sqlserver/test_live_attack.py`) runs as
+part of the live gate and writes audit artifacts to `%TEMP%\sql-mini-mcp-audit`; attach them to the
+review.

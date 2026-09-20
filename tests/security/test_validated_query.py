@@ -1,5 +1,6 @@
 import copy
 import pickle
+import re
 from collections.abc import Callable, Sequence
 from typing import ClassVar, cast
 
@@ -197,3 +198,19 @@ def test_colons_and_marker_like_text_in_plain_literals_are_not_binds() -> None:
     )
     assert query.parameters == ("v",)
     assert "'a :pii_0 ? __bind_x__'" in query.sql
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT /* c1 */ Id FROM /* c2 */ Users -- c3",
+        "SELECT Id -- x */ ; DROP TABLE Canary; --\nFROM Users",
+        "/* lead */ SELECT Id FROM Users WHERE Name = 'x' /* tail */",
+    ],
+)
+def test_user_comments_never_reach_the_generated_sql(sql: str) -> None:
+    query = build(sql)
+    assert "/*" not in query.sql
+    assert "*/" not in query.sql
+    assert "--" not in query.sql
+    assert query.sql == build(re.sub(r"/\*.*?\*/|--[^\n]*", " ", sql, flags=re.S)).sql

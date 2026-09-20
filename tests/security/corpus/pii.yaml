@@ -1,0 +1,252 @@
+# Adversarial SQL corpus: PII policy and token attacks. Protected columns in the runner catalog:
+# Users.Email and Users.Phone (any database), Orders.Total (database "app").
+
+# --- aliasing and duplicate labels -----------------------------------------------------------
+- name: order by alias of protected column
+  sql: "SELECT Email AS Id FROM Users ORDER BY Id"
+  reason: SQL Server orders by the output alias, so this sorts by Email
+- name: order by alias shadowing another column
+  sql: "SELECT Phone AS Name, Name AS Phone FROM Users ORDER BY Name"
+  reason: alias swap must follow lineage
+- name: order by duplicate label ambiguity
+  sql: "SELECT Id AS Email, Email FROM Users ORDER BY Email"
+  reason: ambiguous output label
+- name: order by alias of count
+  sql: "SELECT COUNT(*) AS n FROM Users ORDER BY n"
+  reason: non-column output
+- name: order by qualified protected
+  sql: "SELECT u.Id FROM Users u ORDER BY u.Email"
+  reason: ordering by a protected column reveals its order
+- name: order by second key protected
+  sql: "SELECT Id FROM Users ORDER BY Id, Email"
+  reason: secondary sort key leaks order
+- name: order by bracketed protected
+  sql: "SELECT Id FROM Users ORDER BY [Email]"
+  reason: quoting must not bypass the rule
+- name: order by mixed case protected
+  sql: "SELECT Id FROM Users ORDER BY eMaIl DESC"
+  reason: case must not bypass the rule
+- name: unknown alias qualifier
+  sql: "SELECT x.Email FROM Users u"
+  reason: unresolved qualifier
+- name: table name qualifier when aliased
+  sql: "SELECT Users.Email FROM Users u"
+  reason: SQL Server does not allow the base name once aliased
+- name: ambiguous unqualified protected column
+  sql: "SELECT Email FROM Users u JOIN Contacts c ON u.Id = c.Id"
+  reason: ambiguous column
+- name: duplicate table alias
+  sql: "SELECT u.Id FROM Users u JOIN Orders u ON u.Id = u.Id"
+  reason: duplicate alias
+- name: alias differing only by case
+  sql: "SELECT a.Id FROM Users a JOIN Orders A ON a.Id = A.Id"
+  reason: duplicate alias under case-insensitive collation
+- name: same table twice without alias
+  sql: "SELECT Id FROM Users JOIN Users ON 1 = 1"
+  reason: duplicate binding
+- name: star with unknown qualifier
+  sql: "SELECT x.* FROM Users u"
+  reason: unresolved qualifier
+- name: ambiguous unqualified table
+  sql: "SELECT Id FROM Items"
+  reason: same table name in two schemas
+- name: unknown column
+  sql: "SELECT Missing FROM Users"
+  reason: stale or invented column
+- name: column of another table
+  sql: "SELECT Total FROM Users"
+  reason: column not in the referenced table
+
+- name: order by alias case variant
+  sql: "SELECT Email AS [Id] FROM Users ORDER BY [ID]"
+  reason: alias lookup is case-insensitive
+- name: order by alias equal to real column name
+  sql: "SELECT Email AS Name, Id FROM Users ORDER BY Name"
+  reason: SQL Server sorts by the output alias, which is Email
+- name: order by alias of protected via qualified select
+  sql: "SELECT u.Phone AS Id FROM Users u ORDER BY Id"
+  reason: alias of a protected column
+- name: order by alias of protected in join
+  sql: "SELECT u.Email AS Id FROM Users u JOIN Orders o ON o.UserId = u.Id ORDER BY Id"
+  reason: alias of a protected column across a join
+- name: order by alias through star free projection with self join
+  sql: "SELECT b.Email AS Id FROM Users a JOIN Users b ON a.Id = b.Id ORDER BY Id"
+  reason: alias must resolve to the projected binding, not the first table
+- name: order by protected column of database scoped rule
+  sql: "SELECT Id FROM Orders ORDER BY Total"
+  reason: Orders.Total is protected for database app
+
+# --- protected columns in unsupported positions ------------------------------------------------
+- name: plaintext equality
+  sql: "SELECT Id FROM Users WHERE Email = 'a@example.test'"
+  reason: plaintext predicate on protected column
+- name: plaintext in list
+  sql: "SELECT Id FROM Users WHERE Email IN ('a@example.test')"
+  reason: plaintext predicate on protected column
+- name: mixed in list token and plaintext
+  sql: "SELECT Id FROM Users WHERE Email IN ('{{TOKEN_OWN}}', 'plain')"
+  reason: every list item must be a token
+- name: numeric equality on protected
+  sql: "SELECT Id FROM Users WHERE Phone = 5551234"
+  reason: plaintext predicate
+- name: negative numeric equality on protected
+  sql: "SELECT Id FROM Users WHERE Phone = -1"
+  reason: plaintext predicate
+- name: not equal
+  sql: "SELECT Id FROM Users WHERE Email <> '{{TOKEN_OWN}}'"
+  reason: only = and IN accept tokens
+- name: not equal bang
+  sql: "SELECT Id FROM Users WHERE Email != '{{TOKEN_OWN}}'"
+  reason: only = and IN accept tokens
+- name: greater than
+  sql: "SELECT Id FROM Users WHERE Email > '{{TOKEN_OWN}}'"
+  reason: range probes reveal order
+- name: less or equal
+  sql: "SELECT Id FROM Users WHERE Phone <= '{{TOKEN_OWN}}'"
+  reason: range probes reveal order
+- name: is null on protected
+  sql: "SELECT Id FROM Users WHERE Email IS NULL"
+  reason: not an allowed protected position
+- name: equals null literal
+  sql: "SELECT Id FROM Users WHERE Email = NULL"
+  reason: not a token
+- name: in list with null
+  sql: "SELECT Id FROM Users WHERE Email IN ('{{TOKEN_OWN}}', NULL)"
+  reason: NULL is not a token
+- name: token on the left of equals
+  sql: "SELECT Id FROM Users WHERE '{{TOKEN_OWN}}' = Email"
+  reason: protected column must be on the left
+- name: protected column on the right
+  sql: "SELECT Id FROM Users WHERE Name = Email"
+  reason: column compared with column
+- name: protected against protected
+  sql: "SELECT Id FROM Users WHERE Email = Phone"
+  reason: column compared with column
+- name: self comparison
+  sql: "SELECT Id FROM Users WHERE Email = Email"
+  reason: column compared with column
+- name: parenthesized protected column
+  sql: "SELECT Id FROM Users WHERE (Email) = '{{TOKEN_OWN}}'"
+  reason: only a direct column reference is accepted
+- name: parenthesized projection
+  sql: "SELECT (Email) FROM Users"
+  reason: only direct projections
+- name: negated protected column
+  sql: "SELECT -Phone FROM Users"
+  reason: arithmetic on protected column
+- name: protected join key
+  sql: "SELECT u.Id FROM Users u JOIN Users v ON u.Email = v.Email"
+  reason: join key on protected column
+- name: protected join key across tables
+  sql: "SELECT u.Id FROM Users u JOIN Orders o ON u.Phone = o.Total"
+  reason: join key on protected column
+- name: left join on protected
+  sql: "SELECT u.Id FROM Users u LEFT JOIN Contacts c ON u.Email = c.Email"
+  reason: join key on protected column
+- name: protected column in join on with literal
+  sql: "SELECT u.Id FROM Users u JOIN Orders o ON o.UserId = u.Id AND u.Email = '{{TOKEN_OWN}}'"
+  reason: tokens are accepted only in WHERE
+- name: protected in join on is null
+  sql: "SELECT u.Id FROM Users u JOIN Orders o ON u.Email IS NULL"
+  reason: protected column outside projection and WHERE token
+- name: protected case
+  sql: "SELECT CASE WHEN Email = 'x' THEN 1 END FROM Users"
+  reason: CASE
+- name: protected cast
+  sql: "SELECT CAST(Email AS varchar(3)) FROM Users"
+  reason: CAST
+- name: protected convert
+  sql: "SELECT CONVERT(varchar(3), Phone) FROM Users"
+  reason: CONVERT
+- name: protected function in where
+  sql: "SELECT Id FROM Users WHERE LEN(Email) = 5"
+  reason: function
+- name: protected in count column
+  sql: "SELECT COUNT(Email) FROM Users"
+  reason: aggregate
+- name: protected in group by
+  sql: "SELECT Email FROM Users GROUP BY Email"
+  reason: group by
+- name: token in select list
+  sql: "SELECT '{{TOKEN_OWN}}' FROM Users"
+  reason: tokens are accepted only against protected columns
+- name: token compared with unprotected column
+  sql: "SELECT Id FROM Users WHERE Name = '{{TOKEN_OWN}}'"
+  reason: token used outside a protected predicate
+- name: token in unprotected table with same column name
+  sql: "SELECT Id FROM Contacts WHERE Email = '{{TOKEN_OWN}}'"
+  reason: Contacts.Email is not protected
+- name: token in like
+  sql: "SELECT Id FROM Users WHERE Email LIKE '{{TOKEN_OWN}}'"
+  reason: LIKE
+- name: token in between
+  sql: "SELECT Id FROM Users WHERE Email BETWEEN '{{TOKEN_OWN}}' AND '{{TOKEN_OWN}}'"
+  reason: BETWEEN
+- name: token in top
+  sql: "SELECT TOP '{{TOKEN_OWN}}' Id FROM Users"
+  reason: TOP must be an integer
+- name: token in second protected table column predicate
+  sql: "SELECT o.Id FROM Orders o WHERE o.Total > '{{TOKEN_OWN}}'"
+  reason: range probe on protected column in a database-scoped rule
+- name: token concatenated
+  sql: "SELECT Id FROM Users WHERE Email = '{{TOKEN_OWN}}' + 'x'"
+  reason: token in another expression
+- name: token national literal
+  sql: "SELECT Id FROM Users WHERE Email = N'{{TOKEN_OWN}}'"
+  reason: national string literal is not a plain token literal
+
+# --- malformed, tampered, oversized, cross-alias tokens ----------------------------------------
+- name: cross alias token
+  sql: "SELECT Id FROM Users WHERE Email = '{{TOKEN_OTHER}}'"
+  code: INVALID_PII_TOKEN
+  reason: token issued for another server alias
+- name: cross alias token in list
+  sql: "SELECT Id FROM Users WHERE Email IN ('{{TOKEN_OWN}}', '{{TOKEN_OTHER}}')"
+  code: INVALID_PII_TOKEN
+  reason: one foreign token poisons the list
+- name: malformed token
+  sql: "SELECT Id FROM Users WHERE Email = 'pii:v1:AAAA'"
+  code: INVALID_PII_TOKEN
+  reason: too short
+- name: empty token body
+  sql: "SELECT Id FROM Users WHERE Email = 'pii:v1:'"
+  code: INVALID_PII_TOKEN
+  reason: empty
+- name: wrong version
+  sql: "SELECT Id FROM Users WHERE Email = 'pii:v2:{{TOKEN_BODY}}'"
+  reason: not a pii:v1 token, so it is a plaintext predicate
+- name: prefix only different case
+  sql: "SELECT Id FROM Users WHERE Email = 'PII:V1:{{TOKEN_BODY}}'"
+  reason: not a token, so plaintext predicate
+- name: truncated token
+  sql: "SELECT Id FROM Users WHERE Email = '{{TOKEN_TRUNCATED}}'"
+  code: INVALID_PII_TOKEN
+  reason: truncated ciphertext
+- name: bit flipped token
+  sql: "SELECT Id FROM Users WHERE Email = '{{TOKEN_FLIPPED}}'"
+  code: INVALID_PII_TOKEN
+  reason: authentication failure
+- name: padded token
+  sql: "SELECT Id FROM Users WHERE Email = '{{TOKEN_OWN}}='"
+  code: INVALID_PII_TOKEN
+  reason: non-canonical base64
+- name: token with whitespace
+  sql: "SELECT Id FROM Users WHERE Email = '{{TOKEN_OWN}} '"
+  code: INVALID_PII_TOKEN
+  reason: non-canonical
+- name: token with unicode suffix
+  sql: "SELECT Id FROM Users WHERE Email = '{{TOKEN_OWN}}é'"
+  code: INVALID_PII_TOKEN
+  reason: non-ascii
+- name: oversized token
+  sql: "SELECT Id FROM Users WHERE Email = 'pii:v1:{{PAD_CHAR:A:5000}}'"
+  code: INVALID_PII_TOKEN
+  reason: exceeds the maximum token length
+- name: standard base64 alphabet token
+  sql: "SELECT Id FROM Users WHERE Email = '{{TOKEN_STD_ALPHABET}}'"
+  code: INVALID_PII_TOKEN
+  reason: token uses + or / instead of - and _
+- name: token of a different key same alias name
+  sql: "SELECT Id FROM Users WHERE Email = '{{TOKEN_OTHER_KEY_SAME_ALIAS}}'"
+  code: INVALID_PII_TOKEN
+  reason: wrong key
