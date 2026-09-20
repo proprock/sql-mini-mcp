@@ -113,6 +113,10 @@ class TokenCodec:
     def __repr__(self) -> str:
         return f"TokenCodec(alias={self._alias!r})"
 
+    @property
+    def alias(self) -> str:
+        return self._alias
+
     @overload
     def encrypt(self, value: None) -> None: ...
 

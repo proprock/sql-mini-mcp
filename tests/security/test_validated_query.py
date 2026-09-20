@@ -73,22 +73,22 @@ def test_fields_are_read_only() -> None:
     query = build("SELECT Id FROM Users")
     with pytest.raises(AttributeError):
         query.__setattr__("sql", "DROP TABLE Users")
+    assert isinstance(query.parameters, tuple)
     with pytest.raises(TypeError):
-        cast(dict[str, object], query.parameters)["x"] = 1
+        cast(dict[int, object], query.parameters)[0] = 1
 
 
 def test_token_literals_become_bind_parameters() -> None:
     query = build(f"SELECT Id FROM Users WHERE Email IN ({token('a@b.c')}, {token('d@e.f')})")
-    assert query.parameters == {"pii_0": "a@b.c", "pii_1": "d@e.f"}
-    assert ":pii_0" in query.sql
-    assert ":pii_1" in query.sql
+    assert query.parameters == ("a@b.c", "d@e.f")
+    assert query.sql.count("?") == 2
     assert "pii:v1" not in query.sql
     assert "a@b.c" not in query.sql
 
 
 def test_injection_payload_stays_a_single_bind_value() -> None:
     query = build(f"SELECT Id FROM Users WHERE Email = {token(INJECTION)}")
-    assert query.parameters == {"pii_0": INJECTION}
+    assert query.parameters == (INJECTION,)
     assert "DROP" not in query.sql
     assert "Canary" not in query.sql
     assert query.sql.count(";") == 0
@@ -96,13 +96,13 @@ def test_injection_payload_stays_a_single_bind_value() -> None:
 
 def test_plain_literals_are_not_bound() -> None:
     query = build("SELECT Id FROM Users WHERE Name = 'x' AND Id = 3")
-    assert query.parameters == {}
+    assert query.parameters == ()
     assert "'x'" in query.sql
 
 
 def test_generated_sql_reparses_and_passes_the_allowlist() -> None:
     query = build(f"SELECT Id, Email FROM Users WHERE Email = {token('a')} ORDER BY Id")
-    reparsed = parse_select(query.sql.replace(":pii_0", "'x'"), ParserLimits(65_536, 2000, 8, 500))
+    reparsed = parse_select(query.sql.replace("?", "'x'"), ParserLimits(65_536, 2000, 8, 500))
     assert isinstance(reparsed, exp.Select)
     validate_allowlist(query.ast, allow_placeholders=True)
 
@@ -180,3 +180,20 @@ def test_policy_rejection_produces_no_query() -> None:
     with pytest.raises(DomainError) as info:
         build("SELECT Id FROM Users WHERE Email = 'plain@example.com'")
     assert info.value.code is ErrorCode.QUERY_REJECTED
+
+
+def test_bind_order_follows_the_generated_text_not_the_tree() -> None:
+    query = build(
+        f"SELECT TOP 5 Id FROM Users WHERE Email = {token('first')} AND Name = 'x' "
+        f"AND Email IN ({token('second')}, {token('third')})"
+    )
+    assert query.parameters == ("first", "second", "third")
+    assert query.sql.count("?") == 3
+
+
+def test_colons_and_marker_like_text_in_plain_literals_are_not_binds() -> None:
+    query = build(
+        f"SELECT Id FROM Users WHERE Name = 'a :pii_0 ? __bind_x__' AND Email = {token('v')}"
+    )
+    assert query.parameters == ("v",)
+    assert "'a :pii_0 ? __bind_x__'" in query.sql

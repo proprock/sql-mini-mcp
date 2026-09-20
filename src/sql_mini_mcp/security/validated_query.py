@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+import re
+import secrets
 from dataclasses import dataclass
-from types import MappingProxyType
 from typing import Any, Literal, NoReturn
 
 from sqlglot import exp
@@ -34,6 +34,9 @@ class OutputPlan:
 class ValidatedQuery:
     """SQL produced by the validation pipeline; the only input the executor accepts.
 
+    `sql` uses qmark (`?`) markers and `parameters` holds the matching decrypted values, so no
+    bind value is ever part of the statement text.
+
     Instances are issued by `issue_validated_query` after the final AST check. There is no public
     constructor, and the object cannot be copied or serialized. `repr` never shows SQL or binds.
     """
@@ -48,7 +51,7 @@ class ValidatedQuery:
         database: str,
         ast: exp.Select,
         sql: str,
-        parameters: Mapping[str, Any],
+        parameters: tuple[Any, ...],
         outputs: tuple[OutputPlan, ...],
         max_rows: int,
     ) -> None:
@@ -58,7 +61,7 @@ class ValidatedQuery:
         object.__setattr__(self, "_database", database)
         object.__setattr__(self, "_ast", ast)
         object.__setattr__(self, "_sql", sql)
-        object.__setattr__(self, "_parameters", MappingProxyType(dict(parameters)))
+        object.__setattr__(self, "_parameters", tuple(parameters))
         object.__setattr__(self, "_outputs", outputs)
         object.__setattr__(self, "_max_rows", max_rows)
 
@@ -96,7 +99,8 @@ class ValidatedQuery:
         return self._sql
 
     @property
-    def parameters(self) -> Mapping[str, Any]:
+    def parameters(self) -> tuple[Any, ...]:
+        """Bind values in the order of the `?` markers in `sql`."""
         return self._parameters
 
     @property
@@ -134,6 +138,28 @@ def _cap_rows(query: exp.Select, max_rows: int) -> None:
     query.set("limit", exp.Limit(expression=exp.Literal.number(min(requested, fetch))))
 
 
+def _to_qmark(query: exp.Select, parameters: dict[str, Any]) -> tuple[str, tuple[Any, ...]]:
+    """Render `?` markers and order the values by their position in the generated text.
+
+    Each placeholder is generated as a random one-time marker first, so user literals containing
+    colons or marker-like text cannot be mistaken for binds.
+    """
+    nonce = secrets.token_hex(8)
+    rendered = query.copy()
+    markers: dict[str, str] = {}
+    for placeholder in list(rendered.find_all(exp.Placeholder)):
+        marker = f"__bind_{nonce}_{len(markers)}__"
+        markers[marker] = str(placeholder.this)
+        placeholder.replace(exp.Var(this=marker))
+    sql = rendered.sql(dialect=DIALECT)
+    found = re.findall(rf"__bind_{nonce}_\d+__", sql)
+    if len(found) != len(markers) or set(found) != set(markers):
+        raise reject("bind parameters could not be generated safely.")
+    for marker in found:
+        sql = sql.replace(marker, "?", 1)
+    return sql, tuple(parameters[markers[marker]] for marker in found)
+
+
 def issue_validated_query(
     analyzed: AnalyzedQuery,
     decision: PolicyDecision,
@@ -158,7 +184,7 @@ def issue_validated_query(
     _cap_rows(query, max_rows)
     check_limits(query, limits)
     validate_allowlist(query, allow_placeholders=True)
-    sql = query.sql(dialect=DIALECT)
+    sql, ordered = _to_qmark(query, parameters)
     if PREFIX in sql:
         raise reject("a PII token could not be replaced by a bind parameter.")
     outputs = tuple(
@@ -171,7 +197,7 @@ def issue_validated_query(
         database=database,
         ast=query,
         sql=sql,
-        parameters=parameters,
+        parameters=ordered,
         outputs=outputs,
         max_rows=max_rows,
     )
