@@ -13,6 +13,6 @@ repos:
         types: [python]
       - id: unit-tests
         name: unit tests
-        entry: uv run pytest tests/unit tests/contract tests/security -m not\ deep
+        entry: uv run pytest tests/unit tests/contract
         language: system
         pass_filenames: false

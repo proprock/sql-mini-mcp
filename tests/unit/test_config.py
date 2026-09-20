@@ -142,3 +142,19 @@ servers:
 
     with pytest.raises(DomainError, match="32 bytes"):
         load_config(path, env)
+
+
+def test_rejects_mysql_until_milestone_3(tmp_path: Path) -> None:
+    path = _write(
+        tmp_path,
+        """
+version: 1
+servers:
+  future:
+    engine: mysql
+    connection_url: mysql+pymysql://user:password@localhost/database
+""",
+    )
+
+    with pytest.raises(DomainError, match="CONFIG_ERROR"):
+        load_config(path, {})

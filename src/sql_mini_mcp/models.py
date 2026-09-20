@@ -11,7 +11,7 @@ class OutputModel(BaseModel):
 
 class ServerSummary(OutputModel):
     name: str
-    engine: Literal["sqlserver", "mysql"]
+    engine: Literal["sqlserver"]
     access_level: Literal["metadata", "pii_safe"]
 
 
@@ -99,23 +99,3 @@ class StoredProcedureDefinition(OutputModel):
     name: str
     definition: str | None
     definition_available: bool
-
-
-class ColumnSource(OutputModel):
-    schema_: str | None = Field(serialization_alias="schema")
-    table: str
-    column: str
-
-
-class ResultColumn(OutputModel):
-    name: str
-    source: ColumnSource | None = None
-    protected: bool = False
-    encoding: Literal["base64"] | None = None
-
-
-class SqlResult(OutputModel):
-    columns: list[ResultColumn]
-    rows: list[list[Any]]
-    row_count: int
-    truncated: bool

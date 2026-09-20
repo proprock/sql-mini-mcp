@@ -118,13 +118,11 @@ class DatabaseService:
         schema: str | None = None,
         name_contains: str | None = None,
     ) -> TableList:
-        configured = self._server(server)
-        if configured.engine == "mysql" and schema is not None:
-            raise DomainError(ErrorCode.INVALID_ARGUMENT, "schema must be null for MySQL/MariaDB.")
+        self._server(server)
 
         def operation(engine: Engine) -> list[TableSummary]:
             with engine.connect() as connection:
-                return reflect_tables(connection, configured.engine)
+                return reflect_tables(connection)
 
         tables = await self._run(server, database, operation)
         selected = [
@@ -158,15 +156,11 @@ class DatabaseService:
     async def get_table_definition(
         self, server: str, database: str, table: str, schema: str | None = None
     ) -> TableDefinition:
-        configured = self._server(server)
-        if configured.engine == "mysql" and schema is not None:
-            raise DomainError(ErrorCode.INVALID_ARGUMENT, "schema must be null for MySQL/MariaDB.")
+        self._server(server)
 
         def operation(engine: Engine) -> TableDefinition:
             with engine.connect() as connection:
-                selected = self._resolve_table(
-                    reflect_tables(connection, configured.engine), table, schema
-                )
+                selected = self._resolve_table(reflect_tables(connection), table, schema)
                 return reflect_table_definition(connection, selected.schema_, selected.name)
 
         return await self._run(server, database, operation)
@@ -179,8 +173,6 @@ class DatabaseService:
         name_contains: str | None = None,
     ) -> StoredProcedureList:
         configured = self._server(server)
-        if configured.engine == "mysql" and schema is not None:
-            raise DomainError(ErrorCode.INVALID_ARGUMENT, "schema must be null for MySQL/MariaDB.")
 
         def operation(engine: Engine) -> list[StoredProcedureSummary]:
             with engine.connect() as connection:

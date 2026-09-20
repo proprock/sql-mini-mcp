@@ -18,10 +18,8 @@ from sql_mini_mcp.models import (
 _SQLSERVER_SYSTEM_SCHEMAS = {"guest", "information_schema", "sys"}
 
 
-def list_tables(connection: Connection, engine: str) -> list[TableSummary]:
+def list_tables(connection: Connection) -> list[TableSummary]:
     inspector = inspect(connection)
-    if engine == "mysql":
-        return [TableSummary(schema_=None, name=name) for name in inspector.get_table_names()]
     tables: list[TableSummary] = []
     for schema in inspector.get_schema_names():
         if schema.casefold() in _SQLSERVER_SYSTEM_SCHEMAS:

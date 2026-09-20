@@ -72,7 +72,7 @@ class PiiConfig(BaseModel):
 class ServerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    engine: Literal["sqlserver", "mysql"]
+    engine: Literal["sqlserver"]
     access_level: Literal["metadata", "pii_safe"] = "metadata"
     connection_url: SecretStr
     pii_key_env: str | None = Field(default=None, pattern=r"^[A-Z_][A-Z0-9_]*$")
@@ -88,7 +88,7 @@ class ServerConfig(BaseModel):
             raise ValueError("metadata servers cannot configure pii_key_env or pii rules")
 
         driver = make_url(self.connection_url.get_secret_value()).drivername
-        expected = "mssql+pyodbc" if self.engine == "sqlserver" else "mysql+pymysql"
+        expected = "mssql+pyodbc"
         if driver != expected:
             raise ValueError(f"engine {self.engine!r} requires SQLAlchemy dialect {expected!r}")
         return self
