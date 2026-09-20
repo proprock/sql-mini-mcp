@@ -23,3 +23,19 @@ def test_resolve_table_matches_case_insensitively() -> None:
     selected = DatabaseService._resolve_table(tables, "users", "DBO")
 
     assert selected.name == "Users"
+
+
+def test_resolve_table_uses_explicit_schema_for_duplicate_names() -> None:
+    tables = [
+        TableSummary(schema_="dbo", name="Users"),
+        TableSummary(schema_="audit", name="Users"),
+    ]
+
+    selected = DatabaseService._resolve_table(tables, "USERS", "Audit")
+
+    assert selected.schema_ == "audit"
+
+
+def test_resolve_table_returns_not_found_for_missing_name() -> None:
+    with pytest.raises(DomainError, match="NOT_FOUND"):
+        DatabaseService._resolve_table([], "missing", None)

@@ -15,7 +15,20 @@ from sql_mini_mcp.models import (
     UniqueConstraintDefinition,
 )
 
-_SQLSERVER_SYSTEM_SCHEMAS = {"guest", "information_schema", "sys"}
+_SQLSERVER_SYSTEM_SCHEMAS = {
+    "db_accessadmin",
+    "db_backupoperator",
+    "db_datareader",
+    "db_datawriter",
+    "db_ddladmin",
+    "db_denydatareader",
+    "db_denydatawriter",
+    "db_owner",
+    "db_securityadmin",
+    "guest",
+    "information_schema",
+    "sys",
+}
 
 
 def list_tables(connection: Connection) -> list[TableSummary]:
