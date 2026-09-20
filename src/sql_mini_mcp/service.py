@@ -85,7 +85,7 @@ class DatabaseService:
             ) from exc
         except DBAPIError as exc:
             message = str(exc.orig).casefold()
-            if "timeout" in message or "hyt00" in message or "hyt01" in message:
+            if any(value in message for value in ("timeout", "timed out", "hyt00", "hyt01")):
                 raise DomainError(
                     ErrorCode.TIMEOUT, "The database operation timed out.", retryable=True
                 ) from exc

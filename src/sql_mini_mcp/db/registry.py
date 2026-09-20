@@ -30,6 +30,14 @@ class EngineRegistry:
             from sqlalchemy.engine import make_url
 
             url = make_url(url).set(database=database)
+        timeout = self._config.runtime.statement_timeout_seconds
+        options: dict[str, Any] = {}
+        if server.engine in ("mysql", "mariadb"):
+            options["connect_args"] = {
+                "connect_timeout": self._config.runtime.pool_timeout_seconds,
+                "read_timeout": timeout,
+                "write_timeout": timeout,
+            }
         engine = create_engine(
             url,
             pool_size=self._config.runtime.pool_size,
@@ -37,8 +45,8 @@ class EngineRegistry:
             pool_timeout=self._config.runtime.pool_timeout_seconds,
             pool_pre_ping=True,
             pool_use_lifo=True,
+            **options,
         )
-        timeout = self._config.runtime.statement_timeout_seconds
 
         @event.listens_for(engine, "connect")
         def set_connection_timeout(dbapi_connection: Any, _record: Any) -> None:

@@ -163,6 +163,28 @@ def test_get_stored_procedure_handles_ambiguity_hidden_and_oversized_definition(
         ),
         (SqlAlchemyTimeoutError("pool timeout with secret"), ErrorCode.TIMEOUT),
         (
+            OperationalError(
+                "SELECT secret",
+                {"password": "hidden"},
+                Exception(2013, "Lost connection to MySQL server during query (timed out)"),
+            ),
+            ErrorCode.TIMEOUT,
+        ),
+        (
+            OperationalError(
+                "SELECT secret",
+                {"password": "hidden"},
+                Exception(1044, "Access denied for user 'u'@'%' to database 'secret'"),
+            ),
+            ErrorCode.ACCESS_DENIED,
+        ),
+        (
+            OperationalError(
+                "SELECT secret", {"password": "hidden"}, Exception(1049, "Unknown database 'x'")
+            ),
+            ErrorCode.CONNECTION_FAILED,
+        ),
+        (
             DBAPIError(
                 "SELECT secret", {"password": "hidden"}, Exception("42000 permission denied")
             ),

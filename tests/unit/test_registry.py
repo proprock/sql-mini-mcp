@@ -4,6 +4,7 @@ import asyncio
 import threading
 import time
 from collections.abc import Callable
+from typing import Literal
 from unittest.mock import Mock
 
 import pytest
@@ -152,3 +153,29 @@ def test_registry_configures_pool_database_and_cursor_timeout(
     assert cursor.timeout == 30
 
     callback(None, object(), "SELECT 1", {}, None, False)
+
+
+@pytest.mark.parametrize("engine", ["mysql", "mariadb"])
+def test_registry_passes_pymysql_timeouts_as_connect_args(
+    monkeypatch: pytest.MonkeyPatch, engine: Literal["mysql", "mariadb"]
+) -> None:
+    create = Mock(return_value=Mock())
+    monkeypatch.setattr("sql_mini_mcp.db.registry.create_engine", create)
+    monkeypatch.setattr("sql_mini_mcp.db.registry.event.listens_for", lambda *_args: lambda fn: fn)
+    config = AppConfig(
+        version=1,
+        servers={
+            "one": ServerConfig(
+                engine=engine,
+                connection_url=SecretStr("mysql+pymysql://u:p@one/app"),
+            )
+        },
+    )
+
+    EngineRegistry(config).get("one", "tenant")
+
+    assert create.call_args.kwargs["connect_args"] == {
+        "connect_timeout": 10,
+        "read_timeout": 30,
+        "write_timeout": 30,
+    }
