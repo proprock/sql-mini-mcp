@@ -110,10 +110,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cat > release-notes.md <<EOF
-          Milestone 1 release: a minimal, read-only MCP server for SQL Server metadata.
-
-          Six tools: list_servers, list_databases, list_tables, get_table_definition, list_stored_procedures, and get_stored_procedure. Arbitrary SQL execution is intentionally deferred to Milestone 2.
+          VERSION="${RELEASE_TAG#v}"
+          awk -v version="$VERSION" '
+            /^## \[/ { in_section = index($0, "## [" version "]") == 1; next }
+            in_section
+          ' CHANGELOG.md > release-notes.md
+          if ! grep -q '[^[:space:]]' release-notes.md; then
+            echo "CHANGELOG.md has no entry for $VERSION" >&2
+            exit 1
+          fi
+          cat >> release-notes.md <<EOF
 
           Install and run directly from this tag:
           uvx --from git+https://github.com/proprock/sql-safe-mcp@${RELEASE_TAG} sql-safe-mcp

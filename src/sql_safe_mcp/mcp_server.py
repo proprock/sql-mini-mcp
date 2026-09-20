@@ -50,7 +50,7 @@ def create_server(config: AppConfig) -> MCPServer[AppContext]:
     server: MCPServer[AppContext] = MCPServer(
         "sql-safe-mcp",
         description="Minimal, read-only, PII-safe SQL database navigation.",
-        version="1.1.0",
+        version="1.2.0",
         lifespan=lifespan,
     )
 
