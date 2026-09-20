@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 from mcp import Client
 from mcp_types import TextContent
@@ -34,11 +35,62 @@ def test_metadata_tool_contracts_and_structured_output() -> None:
                 "list_stored_procedures",
                 "get_stored_procedure",
             ]
+            expected_inputs = {
+                "list_servers": (set(), set()),
+                "list_databases": ({"server", "name_contains"}, {"server"}),
+                "list_tables": (
+                    {"server", "database", "schema", "name_contains"},
+                    {"server", "database"},
+                ),
+                "get_table_definition": (
+                    {"server", "database", "table", "schema"},
+                    {"server", "database", "table"},
+                ),
+                "list_stored_procedures": (
+                    {"server", "database", "schema", "name_contains"},
+                    {"server", "database"},
+                ),
+                "get_stored_procedure": (
+                    {"server", "database", "name", "schema"},
+                    {"server", "database", "name"},
+                ),
+            }
+            for tool in listing.tools:
+                properties, required = expected_inputs[tool.name]
+                assert set(tool.input_schema.get("properties", {})) == properties
+                assert set(tool.input_schema.get("required", [])) == required
+                assert tool.annotations is not None
+                assert tool.annotations.read_only_hint is True
+                assert tool.annotations.open_world_hint is False
             result = await client.call_tool("list_servers")
             assert result.is_error is False
             assert result.structured_content == {
                 "servers": [{"name": "legacy", "engine": "sqlserver", "access_level": "metadata"}]
             }
+
+    asyncio.run(scenario())
+
+
+def test_mcp_lifespan_disposes_registry(monkeypatch: Any) -> None:
+    instances: list[Any] = []
+
+    class RecordingRegistry:
+        def __init__(self, config: AppConfig) -> None:
+            self.config = config
+            self.disposed = False
+            instances.append(self)
+
+        def dispose(self) -> None:
+            self.disposed = True
+
+    monkeypatch.setattr("sql_mini_mcp.mcp_server.EngineRegistry", RecordingRegistry)
+
+    async def scenario() -> None:
+        async with Client(create_server(_config()), raise_exceptions=True) as client:
+            result = await client.call_tool("list_servers")
+            assert result.is_error is False
+            assert instances[0].disposed is False
+        assert instances[0].disposed is True
 
     asyncio.run(scenario())
 
