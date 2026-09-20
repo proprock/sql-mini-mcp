@@ -61,5 +61,11 @@ Explicit local Docker cleanup is separate from the gate and removes the test con
 .\scripts\test-sqlserver.ps1 -Reset
 ```
 
-Security-fast, deep, and mutation commands belong to Milestone 2 and are intentionally absent from
-this metadata-only branch.
+The security suite lives in `tests/security` and runs with the fast suite. Add it explicitly when
+running a subset:
+
+```powershell
+uv run pytest tests/unit tests/contract tests/security -q
+```
+
+The deep, mutation, and writable-fixture gates belong to Milestone 2B and are not defined yet.
