@@ -56,6 +56,15 @@ markers = [
     "deep: expensive security verification",
 ]
 
+[tool.mutmut]
+source_paths = ["src/sql_mini_mcp"]
+only_mutate = ["*security/*.py", "*config.py"]
+mutate_only_covered_lines = true
+pytest_add_cli_args = ["-q", "-m", "not integration and not deep", "-p", "no:cacheprovider"]
+pytest_add_cli_args_test_selection = ["tests/unit", "tests/security", "tests/contract"]
+timeout_multiplier = 3.0
+timeout_constant = 5.0
+
 [tool.coverage.run]
 branch = true
 source = ["sql_mini_mcp"]

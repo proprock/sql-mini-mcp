@@ -22,4 +22,13 @@ settings.register_profile(
     database=None,
     suppress_health_check=_HEALTH,
 )
+# Used only by mutation runs: mutmut re-runs the suite once per mutant, so keep examples few.
+settings.register_profile(
+    "security-mutation",
+    max_examples=25,
+    derandomize=True,
+    deadline=None,
+    database=None,
+    suppress_health_check=_HEALTH,
+)
 settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "security-fast"))
