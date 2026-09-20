@@ -7,6 +7,12 @@ categories `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, and `Security`.
 
 ## [Unreleased]
 
+### Security
+
+- `execute_sql` no longer forwards comments from the caller's SQL to the database. The executed
+  statement is generated only from the validated query, so comment text can never become
+  executable text.
+
 ## [1.0.0] - 2026-09-20
 
 ### Added

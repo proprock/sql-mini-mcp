@@ -18,6 +18,9 @@
 - name: nested block comment hides statement
   sql: "SELECT Id FROM Users /* /* */ ; DROP TABLE Canary /* */"
   reason: T-SQL nests block comments, parsers may disagree
+- name: nested comment leaks into generated sql
+  sql: "SELECT Id /* /* */ FROM Users WHERE Name = 'p*/ ; DROP TABLE Canary; --'"
+  reason: sqlglot and SQL Server disagree on comment nesting, so comments must never be emitted
 - name: go batch separator
   sql: "SELECT Id FROM Users\nGO\nDROP TABLE Canary"
   reason: GO is a client batch separator, not SQL

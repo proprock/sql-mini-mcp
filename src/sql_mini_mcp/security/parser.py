@@ -153,6 +153,12 @@ def validate_allowlist(query: exp.Expression, *, allow_placeholders: bool = Fals
             raise reject("unsupported projection.")
 
 
+def strip_comments(query: exp.Expression) -> None:
+    """Drop caller comments so no caller-controlled text is ever emitted into generated SQL."""
+    for node in query.walk():
+        node.pop_comments()
+
+
 def parse_select(sql: str, limits: ParserLimits) -> exp.Select:
     """Parse exactly one root SELECT; any failure becomes QUERY_REJECTED."""
     if len(sql) > limits.max_sql_chars:
@@ -166,6 +172,7 @@ def parse_select(sql: str, limits: ParserLimits) -> exp.Select:
             raise reject("only SELECT statements are supported.")
         check_limits(query, limits)
         validate_allowlist(query)
+        strip_comments(query)
     except DomainError:
         raise
     except Exception as exc:
