@@ -12,10 +12,12 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    environment: pypi
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
     steps:
@@ -56,20 +58,33 @@ jobs:
           /tmp/verify-wheel/bin/pip install --quiet dist/*.whl
           /tmp/verify-wheel/bin/sql-mini-mcp --config /tmp/sql-mini-mcp-config.yaml --check-config
 
-      # PyPI publication remains disabled until the package name and Trusted
-      # Publishing configuration are explicitly approved.
-      # - name: Publish to PyPI
-      #   uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Verify release version metadata
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          PACKAGE_VERSION="$(uv run python -c 'from importlib.metadata import version; print(version("sql-mini-mcp"))')"
+          if [ "$VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "Release tag $RELEASE_TAG does not match package version $PACKAGE_VERSION" >&2
+            exit 1
+          fi
+          jq --arg version "$VERSION" \
+            '(.version, .packages[].version) = $version' \
+            server.json > release-server.json
 
-      # MCP Registry publication remains disabled until a reviewed server.json
-      # exists and the corresponding PyPI package has been published.
-      # - name: Install mcp-publisher
-      #   run: |
-      #     curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
-      # - name: Authenticate to MCP Registry
-      #   run: ./mcp-publisher login github-oidc
-      # - name: Publish server to MCP Registry
-      #   run: ./mcp-publisher publish
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+
+      - name: Validate MCP Registry metadata
+        run: ./mcp-publisher validate release-server.json
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Authenticate to MCP Registry
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish server to MCP Registry
+        run: ./mcp-publisher publish release-server.json
 
       - name: Create GitHub Release
         env:

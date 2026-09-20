@@ -1,5 +1,7 @@
 # sql-mini-mcp
 
+<!-- mcp-name: io.github.proprock/sql-mini-mcp -->
+
 Compact MCP server for SQL Server metadata. The current Milestone 1 build supports only SQL
 Server and is metadata-only; PII-safe `execute_sql` is developed separately in Milestone 2.
 

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.proprock/sql-mini-mcp",
+  "title": "SQL Mini MCP",
+  "description": "Minimal, read-only, PII-safe MCP server for SQL databases.",
+  "repository": {
+    "url": "https://github.com/proprock/sql-mini-mcp",
+    "source": "github"
+  },
+  "version": "0.9.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "sql-mini-mcp",
+      "version": "0.9.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
