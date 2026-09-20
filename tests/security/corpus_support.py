@@ -12,6 +12,7 @@ import yaml
 from sql_mini_mcp.security.tokens import PREFIX, TokenCodec
 
 CORPUS = Path(__file__).parent / "corpus"
+MYSQL_CORPUS = Path(__file__).parent / "corpus_mysql"
 TEMPLATE = re.compile(r"\{\{(\w+)(?::(.*?))?\}\}")
 
 
@@ -24,9 +25,9 @@ class TokenSources:
     own_alias_other_key: TokenCodec
 
 
-def load_cases() -> list[tuple[str, dict[str, Any]]]:
+def load_cases(directory: Path = CORPUS) -> list[tuple[str, dict[str, Any]]]:
     cases: list[tuple[str, dict[str, Any]]] = []
-    for path in sorted(CORPUS.glob("*.yaml")):
+    for path in sorted(directory.glob("*.yaml")):
         for case in yaml.safe_load(path.read_text(encoding="utf-8")):
             cases.append((f"{path.stem}::{case['name']}", case))
     return cases

@@ -172,3 +172,25 @@ def test_versioned_comments_never_reach_generated_sql() -> None:
     assert "50000" not in query.sql
     assert "email" not in query.sql
     assert "#" not in query.sql
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT id /* /* */ FROM users WHERE name = 'p*/ ; DROP TABLE canary; --'",
+        "SELECT id FROM users # ; DROP TABLE canary",
+        'SELECT "id""; DROP TABLE canary; --" FROM users',
+    ],
+)
+def test_tsql_attack_shapes_are_one_safe_statement_in_mysql(sql: str) -> None:
+    query = validate(sql)
+
+    statements = sqlglot.parse(query.sql.replace("%%", "%"), dialect="mysql")
+    assert len(statements) == 1
+    assert statements[0] is not None
+    stripped = statements[0].copy()
+    for literal in list(stripped.find_all(sqlglot.exp.Literal)):
+        literal.replace(sqlglot.exp.Null())
+    outside_literals = stripped.sql(dialect="mysql")
+    assert ";" not in outside_literals
+    assert "DROP" not in outside_literals

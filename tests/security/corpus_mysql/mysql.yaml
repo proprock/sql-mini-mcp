@@ -1,0 +1,414 @@
+# MySQL/MariaDB adversarial corpus. Every case must be rejected with `code` (default
+# QUERY_REJECTED) and must never reach the database. The runner is test_mysql_corpus.py; the
+# T-SQL corpus in ../corpus is replayed there against the mysql dialect as well.
+
+# --- cross-database and system objects ----------------------------------------------------------
+- name: database qualified table
+  sql: "SELECT id FROM app.users"
+  reason: db.table is a cross-database reference, even for the connected database
+- name: mysql system database
+  sql: "SELECT user FROM mysql.user"
+  reason: the mysql system database holds credentials
+- name: information schema
+  sql: "SELECT table_name FROM information_schema.tables"
+  reason: system catalogs are not reflected user tables
+- name: performance schema
+  sql: "SELECT thread_id FROM performance_schema.threads"
+  reason: system catalogs are not reflected user tables
+- name: sys schema
+  sql: "SELECT * FROM sys.session"
+  reason: system catalogs are not reflected user tables
+- name: backtick qualified table
+  sql: "SELECT id FROM `app`.`users`"
+  reason: quoting must not change the cross-database decision
+- name: three part name
+  sql: "SELECT id FROM a.b.users"
+  reason: catalog qualifiers are never allowed
+- name: unknown table
+  sql: "SELECT id FROM secrets"
+  reason: only reflected tables resolve
+
+# --- statements other than one SELECT ----------------------------------------------------------
+- name: table statement
+  sql: "TABLE users"
+  reason: TABLE is a different statement kind
+- name: values statement
+  sql: "VALUES ROW(1, 2)"
+  reason: VALUES is a different statement kind
+- name: show tables
+  sql: "SHOW TABLES"
+  reason: SHOW is not a SELECT
+- name: describe
+  sql: "DESCRIBE users"
+  reason: DESCRIBE is not a SELECT
+- name: explain
+  sql: "EXPLAIN SELECT id FROM users"
+  reason: EXPLAIN is not a SELECT
+- name: call procedure
+  sql: "CALL cleanup()"
+  reason: procedures can write
+- name: set variable
+  sql: "SET @x = 1"
+  reason: SET changes session state
+- name: set sql mode
+  sql: "SET SESSION sql_mode = 'NO_BACKSLASH_ESCAPES'"
+  reason: session state must not be caller controlled
+- name: do statement
+  sql: "DO SLEEP(10)"
+  reason: DO runs an expression
+- name: handler open
+  sql: "HANDLER users OPEN"
+  reason: HANDLER is a low level read interface
+- name: use database
+  sql: "USE mysql"
+  reason: USE switches database
+- name: stacked drop
+  sql: "SELECT id FROM users; DROP TABLE canary"
+  reason: a second statement must never be accepted
+- name: stacked after comment
+  sql: "SELECT id FROM users /* x */ ; DROP TABLE canary"
+  reason: comments must not hide a separator
+- name: stacked after hash comment
+  sql: "SELECT id FROM users # x\n; DROP TABLE canary"
+  reason: a hash comment ends at the newline
+- name: delete
+  sql: "DELETE FROM canary"
+  reason: not a SELECT
+- name: insert select
+  sql: "INSERT INTO canary SELECT id FROM users"
+  reason: not a SELECT
+- name: load data
+  sql: "LOAD DATA INFILE '/etc/passwd' INTO TABLE canary"
+  reason: not a SELECT
+- name: create table
+  sql: "CREATE TABLE t AS SELECT id FROM users"
+  reason: not a SELECT
+
+# --- side effects and locking ------------------------------------------------------------------
+- name: into outfile
+  sql: "SELECT id FROM users INTO OUTFILE '/tmp/x'"
+  reason: writes a file on the server
+- name: into dumpfile
+  sql: "SELECT id FROM users INTO DUMPFILE '/tmp/x'"
+  reason: writes a file on the server
+- name: into user variable
+  sql: "SELECT id INTO @v FROM users"
+  reason: assigns a session variable
+- name: for update
+  sql: "SELECT id FROM users FOR UPDATE"
+  reason: takes write locks
+- name: for share
+  sql: "SELECT id FROM users FOR SHARE"
+  reason: takes locks
+- name: lock in share mode
+  sql: "SELECT id FROM users LOCK IN SHARE MODE"
+  reason: takes locks
+- name: for update skip locked
+  sql: "SELECT id FROM users FOR UPDATE SKIP LOCKED"
+  reason: takes locks
+- name: procedure analyse
+  sql: "SELECT id FROM users PROCEDURE ANALYSE()"
+  reason: calls a server procedure
+
+# --- functions, variables, operators -----------------------------------------------------------
+- name: sleep function
+  sql: "SELECT SLEEP(10)"
+  reason: functions are rejected, sleep is a denial of service
+- name: sleep in where
+  sql: "SELECT id FROM users WHERE SLEEP(10) = 0"
+  reason: functions are rejected anywhere
+- name: benchmark function
+  sql: "SELECT BENCHMARK(100000000, MD5('a'))"
+  reason: functions are rejected
+- name: get lock function
+  sql: "SELECT GET_LOCK('x', 10)"
+  reason: functions are rejected
+- name: load file function
+  sql: "SELECT LOAD_FILE('/etc/passwd')"
+  reason: functions are rejected
+- name: version function
+  sql: "SELECT VERSION()"
+  reason: functions are rejected
+- name: system variable
+  sql: "SELECT @@version"
+  reason: variables are rejected
+- name: global system variable
+  sql: "SELECT @@global.sql_mode"
+  reason: variables are rejected
+- name: user variable assignment
+  sql: "SELECT @a := 1"
+  reason: assigns a session variable
+- name: user variable in predicate
+  sql: "SELECT id FROM users WHERE id = @a"
+  reason: variables are rejected
+- name: json extract function
+  sql: "SELECT JSON_EXTRACT(name, '$.a') FROM users"
+  reason: functions are rejected
+- name: json arrow operator
+  sql: "SELECT name->'$.a' FROM users"
+  reason: JSON operators are rejected
+- name: json double arrow operator
+  sql: "SELECT name->>'$.a' FROM users"
+  reason: JSON operators are rejected
+- name: match against
+  sql: "SELECT id FROM users WHERE MATCH(name) AGAINST('x')"
+  reason: full text search is not supported
+- name: like operator
+  sql: "SELECT id FROM users WHERE name LIKE '%a%'"
+  reason: LIKE is not in the allowlist
+- name: regexp operator
+  sql: "SELECT id FROM users WHERE name REGEXP '^a'"
+  reason: REGEXP is not in the allowlist
+- name: null safe equal
+  sql: "SELECT id FROM users WHERE name <=> NULL"
+  reason: the null-safe operator is not in the allowlist
+- name: xor operator
+  sql: "SELECT id FROM users WHERE id = 1 XOR id = 2"
+  reason: XOR is not in the allowlist
+- name: div operator
+  sql: "SELECT id DIV 2 FROM users"
+  reason: arithmetic is not allowed
+- name: arithmetic
+  sql: "SELECT id + 1 FROM users"
+  reason: arithmetic is not allowed
+- name: pipes concat
+  sql: "SELECT name || 'x' FROM users"
+  reason: operators outside the allowlist are rejected
+- name: case expression
+  sql: "SELECT CASE WHEN id = 1 THEN name END FROM users"
+  reason: CASE is not allowed
+- name: binary cast
+  sql: "SELECT BINARY name FROM users"
+  reason: casts are not allowed
+- name: collate
+  sql: "SELECT name COLLATE utf8mb4_bin FROM users"
+  reason: COLLATE is not allowed
+- name: cast function
+  sql: "SELECT CAST(id AS CHAR) FROM users"
+  reason: casts are not allowed
+
+# --- clauses and modifiers ---------------------------------------------------------------------
+- name: limit offset comma
+  sql: "SELECT id FROM users LIMIT 5, 10"
+  reason: offsets are not supported
+- name: limit offset keyword
+  sql: "SELECT id FROM users LIMIT 5 OFFSET 10"
+  reason: offsets are not supported
+- name: limit expression
+  sql: "SELECT id FROM users LIMIT 5 + 1"
+  reason: LIMIT must be an integer literal
+- name: limit negative
+  sql: "SELECT id FROM users LIMIT -1"
+  reason: LIMIT must be a non-negative integer literal
+- name: limit placeholder
+  sql: "SELECT id FROM users LIMIT ?"
+  reason: placeholders never come from the caller
+- name: top keyword
+  sql: "SELECT TOP 5 id FROM users"
+  reason: TOP is T-SQL, not MySQL
+- name: distinct
+  sql: "SELECT DISTINCT id FROM users"
+  reason: DISTINCT is not allowed
+- name: group by
+  sql: "SELECT id FROM users GROUP BY id"
+  reason: GROUP BY is not allowed
+- name: group by with rollup
+  sql: "SELECT id FROM users GROUP BY id WITH ROLLUP"
+  reason: GROUP BY is not allowed
+- name: having
+  sql: "SELECT id FROM users HAVING id > 1"
+  reason: HAVING is not allowed
+- name: window function
+  sql: "SELECT ROW_NUMBER() OVER (ORDER BY id) FROM users"
+  reason: window functions are not allowed
+- name: select straight join modifier
+  sql: "SELECT STRAIGHT_JOIN id FROM users"
+  reason: select modifiers are not allowed
+- name: sql no cache modifier
+  sql: "SELECT SQL_NO_CACHE id FROM users"
+  reason: select modifiers are not allowed
+- name: sql calc found rows modifier
+  sql: "SELECT SQL_CALC_FOUND_ROWS id FROM users"
+  reason: select modifiers are not allowed
+- name: high priority modifier
+  sql: "SELECT HIGH_PRIORITY id FROM users"
+  reason: select modifiers are not allowed
+- name: use index hint
+  sql: "SELECT id FROM users USE INDEX (primary)"
+  reason: index hints are not allowed
+- name: force index hint
+  sql: "SELECT id FROM users FORCE INDEX (primary)"
+  reason: index hints are not allowed
+- name: ignore index hint
+  sql: "SELECT id FROM users IGNORE INDEX (primary)"
+  reason: index hints are not allowed
+- name: straight join
+  sql: "SELECT u.id FROM users u STRAIGHT_JOIN orders o ON o.user_id = u.id"
+  reason: only INNER and LEFT joins are allowed
+- name: natural join
+  sql: "SELECT u.id FROM users u NATURAL JOIN orders"
+  reason: joins need an ON clause
+- name: join using
+  sql: "SELECT u.id FROM users u JOIN orders o USING (id)"
+  reason: joins need an ON clause
+- name: cross join
+  sql: "SELECT u.id FROM users u CROSS JOIN orders o"
+  reason: joins need an ON clause
+- name: right join
+  sql: "SELECT u.id FROM users u RIGHT JOIN orders o ON o.user_id = u.id"
+  reason: only INNER and LEFT joins are allowed
+- name: comma join
+  sql: "SELECT u.id FROM users u, orders o"
+  reason: implicit joins are not allowed
+- name: partition selection
+  sql: "SELECT id FROM users PARTITION (p0)"
+  reason: partition selection is not allowed
+- name: derived table
+  sql: "SELECT id FROM (SELECT id FROM users) t"
+  reason: derived tables are not allowed
+- name: scalar subquery
+  sql: "SELECT (SELECT COUNT(*) FROM users) FROM canary"
+  reason: subqueries are not allowed
+- name: in subquery
+  sql: "SELECT id FROM users WHERE id IN (SELECT id FROM orders)"
+  reason: subqueries are not allowed
+- name: exists subquery
+  sql: "SELECT id FROM users WHERE EXISTS (SELECT 1 FROM orders)"
+  reason: subqueries are not allowed
+- name: cte
+  sql: "WITH t AS (SELECT id FROM users) SELECT id FROM t"
+  reason: CTEs are not allowed
+- name: recursive cte
+  sql: "WITH RECURSIVE t AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM t) SELECT n FROM t"
+  reason: CTEs are not allowed
+- name: union
+  sql: "SELECT id FROM users UNION SELECT id FROM orders"
+  reason: set operations are not allowed
+- name: union all
+  sql: "SELECT id FROM users UNION ALL SELECT id FROM orders"
+  reason: set operations are not allowed
+- name: intersect
+  sql: "SELECT id FROM users INTERSECT SELECT id FROM orders"
+  reason: set operations are not allowed
+- name: values row in from
+  sql: "SELECT * FROM (VALUES ROW(1)) t"
+  reason: derived tables are not allowed
+- name: lateral derived table
+  sql: "SELECT u.id FROM users u, LATERAL (SELECT 1) t"
+  reason: derived tables are not allowed
+- name: json table
+  sql: "SELECT * FROM JSON_TABLE('[1]', '$[*]' COLUMNS (a INT PATH '$')) t"
+  reason: table functions are not allowed
+- name: table function
+  sql: "SELECT * FROM users, JSON_TABLE(name, '$[*]' COLUMNS (a INT PATH '$')) t"
+  reason: table functions are not allowed
+- name: order by expression
+  sql: "SELECT id FROM users ORDER BY RAND()"
+  reason: ORDER BY takes a direct column only
+- name: order by position
+  sql: "SELECT id FROM users ORDER BY 1"
+  reason: ORDER BY takes a direct column only
+- name: order by protected
+  sql: "SELECT id FROM users ORDER BY email"
+  reason: protected columns cannot be ordered
+- name: order by protected alias
+  sql: "SELECT email AS e FROM users ORDER BY e"
+  reason: alias lineage keeps the column protected
+
+# --- identifiers -------------------------------------------------------------------------------
+- name: backtick identifier with quote
+  sql: "SELECT `id``x` FROM users"
+  reason: unknown column
+- name: backtick table injection
+  sql: "SELECT id FROM `users; DROP TABLE canary`"
+  reason: unknown table
+- name: temp table hash
+  sql: "SELECT id FROM #t"
+  reason: hash starts a comment, leaving an incomplete query
+- name: unicode homoglyph table
+  sql: "SELECT id FROM usеrs"
+  reason: identifiers match reflected names exactly
+- name: ambiguous case duplicate
+  sql: "SELECT id FROM USERS AS u JOIN users AS U ON u.id = U.id"
+  reason: duplicate bindings are rejected
+
+# --- PII ---------------------------------------------------------------------------------------
+- name: pii plaintext equality
+  sql: "SELECT id FROM users WHERE email = 'a@example.com'"
+  reason: protected predicates need a token
+- name: pii plaintext in list
+  sql: "SELECT id FROM users WHERE email IN ('{{TOKEN_OWN}}', 'a@example.com')"
+  reason: every value in the list must be a token
+- name: pii like
+  sql: "SELECT id FROM users WHERE email LIKE 'a%'"
+  reason: LIKE is not allowed
+- name: pii null safe equal with token
+  sql: "SELECT id FROM users WHERE email <=> '{{TOKEN_OWN}}'"
+  reason: only = and IN accept tokens
+- name: pii token reversed
+  sql: "SELECT id FROM users WHERE '{{TOKEN_OWN}}' = email"
+  reason: the protected column must be on the left
+- name: pii token greater than
+  sql: "SELECT id FROM users WHERE email > '{{TOKEN_OWN}}'"
+  reason: only = and IN accept tokens
+- name: pii token in or with plaintext
+  sql: "SELECT id FROM users WHERE email = '{{TOKEN_OWN}}' OR email = 'x'"
+  reason: every protected comparison needs a token
+- name: pii token in projection
+  sql: "SELECT '{{TOKEN_OWN}}' FROM users"
+  reason: a token outside a protected predicate is rejected
+- name: pii token against plain column
+  sql: "SELECT id FROM users WHERE name = '{{TOKEN_OWN}}'"
+  reason: tokens are only valid against protected columns
+- name: pii foreign token
+  sql: "SELECT id FROM users WHERE email = '{{TOKEN_OTHER}}'"
+  code: INVALID_PII_TOKEN
+  reason: a token of another alias is refused without detail
+- name: pii same alias other key token
+  sql: "SELECT id FROM users WHERE email = '{{TOKEN_OTHER_KEY_SAME_ALIAS}}'"
+  code: INVALID_PII_TOKEN
+  reason: a token minted with another key is refused without detail
+- name: pii flipped token
+  sql: "SELECT id FROM users WHERE email = '{{TOKEN_FLIPPED}}'"
+  code: INVALID_PII_TOKEN
+  reason: tampered tokens are refused without detail
+- name: pii truncated token
+  sql: "SELECT id FROM users WHERE email = '{{TOKEN_TRUNCATED}}'"
+  code: INVALID_PII_TOKEN
+  reason: truncated tokens are refused without detail
+- name: pii join key
+  sql: "SELECT u.id FROM users u JOIN orders o ON o.total = u.email"
+  reason: protected columns cannot be join keys
+- name: pii join key with token
+  sql: "SELECT u.id FROM users u JOIN orders o ON u.email = '{{TOKEN_OWN}}'"
+  reason: tokens are only accepted in WHERE
+- name: pii cast
+  sql: "SELECT CAST(email AS CHAR) FROM users"
+  reason: casts are not allowed
+- name: pii function
+  sql: "SELECT UPPER(email) FROM users"
+  reason: functions are not allowed
+- name: pii concat
+  sql: "SELECT CONCAT(email, 'x') FROM users"
+  reason: functions are not allowed
+- name: pii count distinct
+  sql: "SELECT COUNT(DISTINCT email) FROM users"
+  reason: only COUNT(*) is allowed
+- name: pii max
+  sql: "SELECT MAX(email) FROM users"
+  reason: aggregates are not allowed
+- name: pii group by
+  sql: "SELECT email FROM users GROUP BY email"
+  reason: GROUP BY is not allowed
+- name: pii is not null with plaintext
+  sql: "SELECT id FROM users WHERE email IS NOT NULL AND email = 'a'"
+  reason: protected comparisons need a token
+- name: pii between
+  sql: "SELECT id FROM users WHERE email BETWEEN 'a' AND 'z'"
+  reason: BETWEEN is not allowed
+- name: pii not in
+  sql: "SELECT id FROM users WHERE email NOT IN ('{{TOKEN_OWN}}')"
+  reason: NOT is not allowed on protected predicates
+- name: pii negated equality
+  sql: "SELECT id FROM users WHERE NOT email = '{{TOKEN_OWN}}'"
+  reason: NOT is not allowed
