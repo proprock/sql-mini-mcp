@@ -65,8 +65,10 @@ databases, tables, columns, keys, indexes, stored procedures - and, on servers y
 | `execute_sql` | 🟢 read | One restricted `SELECT` on a `pii_safe` server; protected columns return tokens |
 
 > [!NOTE]
-> **Status:** SQL Server only. MySQL/MariaDB is planned; see [ARCHITECTURE.md](ARCHITECTURE.md).
-> Configuration for MySQL/MariaDB is rejected until it ships.
+> **Status:** SQL Server supports every tool. MySQL and MariaDB (`engine: mysql` or `mariadb`,
+> `mysql+pymysql` URLs) support the metadata tools only: `schema` is always `null` because the
+> database is the catalog, and `pii_safe` / `execute_sql` are rejected until SQL support ships. See
+> [ARCHITECTURE.md](ARCHITECTURE.md).
 
 - [Install](#install)
 - [Configure](#configure)

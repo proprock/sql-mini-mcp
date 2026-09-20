@@ -30,3 +30,8 @@ servers:
     engine: sqlserver
     access_level: metadata
     connection_url: "${REPORTING_SQL_URL}"
+
+  reporting-mysql:
+    engine: mysql # or mariadb; metadata only
+    access_level: metadata
+    connection_url: "${REPORTING_MYSQL_URL}" # mysql+pymysql://user:password@host/database
