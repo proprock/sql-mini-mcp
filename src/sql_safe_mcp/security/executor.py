@@ -4,7 +4,7 @@ import base64
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any, Protocol
 from uuid import UUID
@@ -75,7 +75,7 @@ def _encode(value: Any) -> tuple[Any, ResultEncoding]:
     if kind is timedelta:  # MySQL TIME; only a time of day fits the `time` encoding
         if not timedelta(0) <= value < timedelta(days=1):
             raise _unsupported_result()
-        return (datetime.min.replace(tzinfo=UTC) + value).time().isoformat(), "time"
+        return (datetime.min + value).time().isoformat(), "time"
     if kind is UUID:
         return str(value), "uuid"
     if kind in (bytes, bytearray, memoryview):

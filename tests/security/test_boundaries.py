@@ -17,6 +17,7 @@ import sql_safe_mcp.security.schema as schema_module
 import sql_safe_mcp.security.validated_query as vq_module
 from sql_safe_mcp.config import PiiConfig, PiiRule
 from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.security.dialect import SQLSERVER
 from sql_safe_mcp.security.executor import execute_validated
 from sql_safe_mcp.security.lineage import _cross_check, analyze_query
 from sql_safe_mcp.security.parser import (
@@ -41,7 +42,7 @@ LIMITS = ParserLimits.from_runtime(RUNTIME)
 
 def analyzed(sql: str):
     query = parse_select(sql, LIMITS)
-    return analyze_query(query, resolve_tables(query, Catalog()), LIMITS)
+    return analyze_query(query, resolve_tables(query, Catalog()), LIMITS, SQLSERVER)
 
 
 # --- validated query ---------------------------------------------------------------------------
@@ -274,20 +275,20 @@ ORDERS = TableSchema("dbo", "Orders", ("Id", "UserId"))
 
 def test_the_cross_check_accepts_a_fully_resolved_query() -> None:
     query = parse_select("SELECT [Users].[Id] FROM [dbo].[Users]", LIMITS)
-    _cross_check(query, _tables(USERS))
+    _cross_check(query, _tables(USERS), SQLSERVER)
 
 
 def test_the_cross_check_rejects_an_unknown_column() -> None:
     query = parse_select("SELECT [Users].[Nope] FROM [dbo].[Users]", LIMITS)
     with pytest.raises(DomainError) as info:
-        _cross_check(query, _tables(USERS))
+        _cross_check(query, _tables(USERS), SQLSERVER)
     assert info.value.public_message == f"Query rejected: {Reason.QUALIFY_FAILED.value}."
 
 
 def test_the_cross_check_rejects_a_column_with_the_wrong_case() -> None:
     query = parse_select("SELECT [Users].[id] FROM [dbo].[Users]", LIMITS)
     with pytest.raises(DomainError):
-        _cross_check(query, _tables(USERS))
+        _cross_check(query, _tables(USERS), SQLSERVER)
 
 
 def test_the_cross_check_rejects_an_ambiguous_unqualified_column() -> None:
@@ -296,7 +297,7 @@ def test_the_cross_check_rejects_an_ambiguous_unqualified_column() -> None:
         LIMITS,
     )
     with pytest.raises(DomainError):
-        _cross_check(query, _tables(USERS, ORDERS))
+        _cross_check(query, _tables(USERS, ORDERS), SQLSERVER)
 
 
 # --- policy ------------------------------------------------------------------------------------
@@ -388,7 +389,7 @@ def test_a_projection_without_a_from_clause_is_accepted() -> None:
 def test_table_resolution_must_match_the_query_tables() -> None:
     query = parse_select("SELECT Id FROM Users", LIMITS)
     with pytest.raises(DomainError) as info:
-        analyze_query(query, (), LIMITS)
+        analyze_query(query, (), LIMITS, SQLSERVER)
     assert info.value.public_message == f"Query rejected: {Reason.TABLE_RESOLUTION_MISMATCH.value}."
 
 
@@ -464,7 +465,7 @@ def test_a_none_schema_from_reflection_becomes_an_empty_schema(
 def test_a_bare_protected_column_used_as_a_predicate_is_rejected() -> None:
     rules = [PiiRule(database="*", schema="dbo", table="Users", columns=["Name"])]
     query = parse_select("SELECT Id FROM Users WHERE Name", LIMITS)
-    result = analyze_query(query, resolve_tables(query, Catalog()), LIMITS)
+    result = analyze_query(query, resolve_tables(query, Catalog()), LIMITS, SQLSERVER)
     with pytest.raises(DomainError) as info:
         PiiPolicy("app", PiiConfig(rules=rules), OWN).evaluate(result)
     assert info.value.public_message == f"Query rejected: {Reason.PROTECTED_POSITION.value}."

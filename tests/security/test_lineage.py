@@ -5,6 +5,7 @@ import pytest
 from sqlglot import exp
 
 from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.security.dialect import SQLSERVER
 from sql_safe_mcp.security.lineage import AnalyzedQuery, SourceColumn, analyze_query
 from sql_safe_mcp.security.parser import ParserLimits, parse_select
 from sql_safe_mcp.security.schema import resolve_tables
@@ -29,7 +30,7 @@ class Catalog:
 
 def analyze(sql: str, limits: ParserLimits = LIMITS) -> AnalyzedQuery:
     query = parse_select(sql, limits)
-    return analyze_query(query, resolve_tables(query, Catalog()), limits)
+    return analyze_query(query, resolve_tables(query, Catalog()), limits, SQLSERVER)
 
 
 def rejected(sql: str, limits: ParserLimits = LIMITS) -> None:
@@ -159,7 +160,7 @@ def test_input_query_is_not_mutated() -> None:
     query = parse_select("SELECT * FROM Users", LIMITS)
     tables = resolve_tables(query, Catalog())
     before = query.sql("tsql")
-    analyze_query(query, tables, LIMITS)
+    analyze_query(query, tables, LIMITS, SQLSERVER)
     assert query.sql("tsql") == before
 
 

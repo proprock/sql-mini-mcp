@@ -8,7 +8,7 @@ from sqlglot import exp
 from sqlglot.errors import OptimizeError, SqlglotError
 from sqlglot.optimizer.qualify import qualify
 
-from sql_safe_mcp.security.dialect import SQLSERVER, SqlDialect
+from sql_safe_mcp.security.dialect import SqlDialect
 from sql_safe_mcp.security.parser import (
     ParserLimits,
     check_limits,
@@ -167,9 +167,7 @@ def _resolve_order_column(
     return _rewrite(column, binding, canonical)
 
 
-def _cross_check(
-    query: exp.Select, schemas: Sequence[TableSchema], dialect: SqlDialect = SQLSERVER
-) -> None:
+def _cross_check(query: exp.Select, schemas: Sequence[TableSchema], dialect: SqlDialect) -> None:
     catalog: dict[str, dict] = {}
     for table in schemas:
         columns = dict.fromkeys(table.columns, "varchar")
@@ -193,7 +191,7 @@ def analyze_query(
     query: exp.Select,
     schemas: Sequence[TableSchema],
     limits: ParserLimits,
-    dialect: SqlDialect = SQLSERVER,
+    dialect: SqlDialect,
 ) -> AnalyzedQuery:
     """Expand stars, resolve every column to a reflected source, and rebuild canonical names.
 

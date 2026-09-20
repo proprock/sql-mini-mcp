@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import pytest
 import sqlglot
@@ -12,7 +12,9 @@ from support import ALIAS, DATABASE, OWN, RUNTIME
 from sql_safe_mcp.config import PiiConfig, PiiRule
 from sql_safe_mcp.errors import DomainError, ErrorCode
 from sql_safe_mcp.security.dialect import MYSQL, SQLSERVER, dialect_for
+from sql_safe_mcp.security.lineage import _cross_check
 from sql_safe_mcp.security.pipeline import validate_sql
+from sql_safe_mcp.security.schema import TableSchema
 from sql_safe_mcp.security.validated_query import ValidatedQuery
 
 MYSQL_PII = PiiConfig(rules=[PiiRule(database="*", table="users", columns=["email", "phone"])])
@@ -60,7 +62,7 @@ def test_dialect_comes_from_the_engine() -> None:
     assert dialect_for("sqlserver") is SQLSERVER
     assert dialect_for("mysql") is MYSQL
     assert dialect_for("mariadb") is MYSQL
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="unsupported engine 'postgres'"):
         dialect_for("postgres")
 
 
@@ -219,3 +221,16 @@ def test_count_star_is_allowed_and_keeps_its_shape() -> None:
 )
 def test_only_plain_count_star_is_allowed(sql: str) -> None:
     rejected(sql)
+
+
+def _mysql_select(sql: str) -> Any:
+    return sqlglot.parse_one(sql, dialect="mysql")
+
+
+def test_second_opinion_uses_a_flat_catalog_on_mysql() -> None:
+    tables = (TableSchema("", "users", ("id", "email")),)
+
+    _cross_check(_mysql_select("SELECT `users`.`id` FROM `users`"), tables, MYSQL)
+    with pytest.raises(DomainError) as info:
+        _cross_check(_mysql_select("SELECT `users`.`nope` FROM `users`"), tables, MYSQL)
+    assert info.value.code is ErrorCode.QUERY_REJECTED
