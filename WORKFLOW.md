@@ -49,3 +49,24 @@ GitHub Actions validates the non-Docker suite and clean package installations. D
 Server integration tests remain an opt-in local gate. Release tags create a GitHub Release with the
 checked wheel and source distribution and publish the package to PyPI and its metadata to the MCP
 Registry. Creating or pushing a release tag requires the maintainer's explicit instruction.
+
+## Milestone closure is a release
+
+Closing a milestone always means cutting a release. Before the milestone's pull request is
+opened, ask the user for the version number; do not choose it. The suggested bump follows
+[CONTRIBUTING.md](CONTRIBUTING.md) (additive capability is MINOR, a fix alone is PATCH), but the
+user decides.
+
+Make every release edit in the milestone pull request itself, so that after it merges only the tag
+is left to create:
+
+- rename `## [Unreleased]` in `CHANGELOG.md` to the version and date, leaving a fresh empty
+  `## [Unreleased]` above it;
+- bump `version` in `pyproject.toml`, both version fields in `server.json`, `__version__` in
+  `src/sql_mini_mcp/__init__.py`, the server version in `src/sql_mini_mcp/mcp_server.py`, and the
+  assertions in `tests/unit/test_version.py`, then run `uv lock`;
+- update README and documentation status notes and pinned-version examples;
+- run the fast suite, the milestone live gate, and the prek hooks on that final state.
+
+The tag itself is created and pushed only on the maintainer's explicit instruction after the merge,
+and only from the merged commit on `master`.

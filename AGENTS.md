@@ -20,6 +20,8 @@ Read `ARCHITECTURE.md` before changing public contracts or security boundaries.
 - Keep MCP tools few and responses compact; do not publish tables as MCP resources.
 - Keep changes and Conventional Commits task-scoped.
 - Do not commit process or instruction-document changes without the user's explicit approval.
+- Closing a milestone always means a release: ask the user for the version number and put every
+  release edit in the milestone PR so only the tag remains (see `WORKFLOW.md`).
 - Create a Git worktree only when the source checkout has uncommitted source changes that must be
   preserved, and only after the user explicitly approves it. Use the existing checkout otherwise.
 - Do not modify `.gitignore` without the user's explicit approval.

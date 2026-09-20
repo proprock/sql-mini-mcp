@@ -123,7 +123,8 @@ releases. Each tag is a GitHub Release with CI-checked wheel and source distribu
 it is published to [PyPI](https://pypi.org/project/sql-mini-mcp/) and the MCP Registry by the
 release workflow.
 
-Releases are cut by the maintainer:
+Releases are cut by the maintainer, and closing a milestone always means a release (see
+[WORKFLOW.md](WORKFLOW.md)):
 
 - The `[Unreleased]` section decides the version: a new tool, setting, or other additive capability
   is a MINOR bump; a fix alone is a PATCH.
