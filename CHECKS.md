@@ -90,6 +90,15 @@ Externally managed servers use `SQL_MINI_MCP_TEST_MYSQL_URL` and
 `SQL_MINI_MCP_TEST_MARIADB_URL` with `uv run pytest tests/integration/mysql -m integration`.
 `.\scripts\test-mysql.ps1 -Reset` removes the containers and volumes.
 
+The release matrix starts (or reuses) all three containers, sets all three URLs, and runs every
+live suite plus the cross-engine test (same public contract on the three engines, tokens of one
+alias refused by the others with one identical `INVALID_PII_TOKEN`). It is part of the milestone
+live gate and is never run by the single-engine scripts:
+
+```powershell
+.\scripts\test-matrix.ps1
+```
+
 Explicit local Docker cleanup is separate from the gate and removes the test container and volume:
 
 ```powershell

@@ -94,7 +94,11 @@ pip install sql-mini-mcp
 Pin a version when you want a fixed surface: `uvx sql-mini-mcp==1.1.0`.
 
 Requires Python 3.12+, [uv](https://docs.astral.sh/uv/) (or `pip`), and
-[Microsoft ODBC Driver 18 for SQL Server](https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server).
+[Microsoft ODBC Driver 18 for SQL Server](https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server)
+when you connect to SQL Server. MySQL and MariaDB use the bundled PyMySQL driver and need nothing
+else.
+
+Verified against SQL Server 2022, MySQL 8.4, and MariaDB 11.4 (see [CHECKS.md](CHECKS.md)).
 
 ## Configure
 

@@ -81,6 +81,14 @@ container and its volume. To use an external disposable server instead, set
 `SQL_MINI_MCP_TEST_SQLSERVER_URL` and run `uv run pytest tests/integration/sqlserver -m integration`.
 Details are in [CHECKS.md](CHECKS.md).
 
+MySQL and MariaDB have their own digest-pinned containers and script, and the release matrix runs
+all three engines together:
+
+```powershell
+.\scripts\test-mysql.ps1
+.\scripts\test-matrix.ps1
+```
+
 ## Architecture
 
 ```text
