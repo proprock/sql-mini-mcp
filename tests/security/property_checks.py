@@ -73,13 +73,19 @@ def check_generated_sql_reparses_and_validates(spec: Spec, seed: int) -> None:
     assert PREFIX not in query.sql
 
 
+def check_every_forbidden_mutation_changes_the_query(spec: Spec, seed: int) -> None:
+    """Guards the guard: a mutation that silently does nothing would inflate the coverage."""
+    sql = render(spec, seed)
+    for index, mutate in enumerate(FORBIDDEN_MUTATIONS):
+        assert mutate(sql) != sql, f"mutation {index} is a no-op for {sql!r}"
+
+
 def check_forbidden_constructs_are_rejected_and_never_executed(
     spec: Spec, seed: int, mutation_index: int
 ) -> None:
     sql = render(spec, seed, alias_style=0)
     mutated = FORBIDDEN_MUTATIONS[mutation_index % len(FORBIDDEN_MUTATIONS)](sql)
-    if mutated == sql:
-        return
+    assert mutated != sql, "mutation did not change the query"
     before = len(SPY.calls)
     try:
         asyncio.run(SERVICE.execute_sql(ALIAS, DATABASE, mutated))
@@ -90,13 +96,16 @@ def check_forbidden_constructs_are_rejected_and_never_executed(
     assert len(SPY.calls) == before
 
 
-def check_arbitrary_text_never_crashes_and_is_never_executed(text: str) -> None:
+def check_only_validated_sql_is_ever_executed(text: str) -> None:
+    """Anything that reached the driver is exactly what the validator produces for that text."""
     before = len(SPY.calls)
     with contextlib.suppress(DomainError):
         asyncio.run(SERVICE.execute_sql(ALIAS, DATABASE, text))
-    # A text that happens to be an allowed query may execute; anything executed was validated.
-    for statement, _ in SPY.calls[before:]:
-        assert statement.upper().startswith("SELECT TOP ")
+    executed = SPY.calls[before:]
+    assert len(executed) <= 1
+    for statement, parameters in executed:
+        validated = validate(text)
+        assert (statement, parameters) == (validated.sql, validated.parameters)
 
 
 def check_plaintext_is_never_serialized(values: list[str]) -> None:

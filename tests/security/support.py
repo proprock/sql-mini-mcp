@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import random
+import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, ClassVar, cast
@@ -160,26 +161,37 @@ ORDERS_COLUMNS = ["o.Id", "o.UserId", "o.Total"]
 PROTECTED = {"u.Email", "u.Phone", "o.Total"}
 NUMERIC = {"u.Id", "o.Id", "o.UserId"}
 PLAIN_TEXT = {"u.Name"}
+_SELECT_KW = r"\bselect\b"
+_FROM_KW = r"\bfrom\b"
+_USERS_ALIAS = r"\bUsers(?:\s|/\*c\*/|--c\n)+u\b"
+
+
+def _sub(pattern: str, replacement: str, sql: str) -> str:
+    return re.sub(pattern, lambda _match: replacement, sql, count=1, flags=re.IGNORECASE)
+
+
+# Each mutation injects one forbidden construct. They match keywords case-insensitively and
+# tolerate the whitespace/comment variants `render` produces, so none is ever a silent no-op.
 FORBIDDEN_MUTATIONS: list[Callable[[str], str]] = [
     lambda s: s + " UNION SELECT 1",
     lambda s: s + "; DROP TABLE Canary",
     lambda s: s + " OPTION (MAXDOP 1)",
     lambda s: s + " FOR JSON AUTO",
-    lambda s: s.replace("Users u", "Users u WITH (NOLOCK)", 1),
-    lambda s: s.replace("Users u", "other.dbo.Users u", 1),
-    lambda s: s.replace("Users u", "(SELECT Id FROM Users) u", 1),
-    lambda s: s.replace("FROM", "INTO #t FROM", 1),
-    lambda s: s.replace("SELECT", "SELECT DISTINCT", 1),
-    lambda s: s.replace("SELECT", "SELECT LOWER('x'),", 1),
-    lambda s: s.replace("SELECT", "SELECT (SELECT 1),", 1),
-    lambda s: s.replace("SELECT", "SELECT @@version,", 1),
-    lambda s: s.replace("SELECT", "SELECT CASE WHEN 1 = 1 THEN 1 END,", 1),
-    lambda s: s.replace("SELECT", "WITH c AS (SELECT 1 AS n) SELECT", 1),
+    lambda s: _sub(_USERS_ALIAS, "Users u WITH (NOLOCK)", s),
+    lambda s: _sub(_USERS_ALIAS, "other.dbo.Users u", s),
+    lambda s: _sub(_USERS_ALIAS, "(SELECT Id FROM Users) u", s),
+    lambda s: _sub(_FROM_KW, "INTO #t FROM", s),
+    lambda s: _sub(_SELECT_KW, "SELECT DISTINCT", s),
+    lambda s: _sub(_SELECT_KW, "SELECT LOWER('x'),", s),
+    lambda s: _sub(_SELECT_KW, "SELECT (SELECT 1),", s),
+    lambda s: _sub(_SELECT_KW, "SELECT @@version,", s),
+    lambda s: _sub(_SELECT_KW, "SELECT CASE WHEN 1 = 1 THEN 1 END,", s),
+    lambda s: _sub(_SELECT_KW, "WITH c AS (SELECT 1 AS n) SELECT", s),
     lambda s: "EXEC ('" + s.replace("'", "''") + "')",
     lambda s: s + " CROSS APPLY dbo.F(1) f",
-    lambda s: s.replace("SELECT", "SELECT SUM(u.Id),", 1),
+    lambda s: _sub(_SELECT_KW, "SELECT SUM(u.Id),", s),
     lambda s: "DELETE FROM Canary; " + s,
-    lambda s: s.replace("FROM Users u", "FROM Users u, Orders x", 1),
+    lambda s: _sub(_USERS_ALIAS, "Users u, Orders x", s),
 ]
 
 

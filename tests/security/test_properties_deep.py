@@ -42,6 +42,12 @@ def test_deep_generated_sql_reparses_and_validates(spec: Spec, seed: int) -> Non
 
 
 @settings(DEEP)
+@given(specs(), SEEDS)
+def test_deep_every_forbidden_mutation_actually_changes_the_query(spec: Spec, seed: int) -> None:
+    checks.check_every_forbidden_mutation_changes_the_query(spec, seed)
+
+
+@settings(DEEP)
 @given(specs(), SEEDS, st.integers(0, 10_000))
 def test_deep_forbidden_constructs_are_rejected_and_never_executed(
     spec: Spec, seed: int, mutation: int
@@ -51,8 +57,8 @@ def test_deep_forbidden_constructs_are_rejected_and_never_executed(
 
 @settings(DEEP)
 @given(st.one_of(st.text(max_size=400), SQL_FRAGMENTS))
-def test_deep_arbitrary_text_never_crashes_and_is_never_executed(text: str) -> None:
-    checks.check_arbitrary_text_never_crashes_and_is_never_executed(text)
+def test_deep_only_validated_sql_is_ever_executed(text: str) -> None:
+    checks.check_only_validated_sql_is_ever_executed(text)
 
 
 @settings(DEEP)
