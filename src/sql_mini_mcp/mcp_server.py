@@ -14,6 +14,7 @@ from sql_mini_mcp.errors import DomainError
 from sql_mini_mcp.models import (
     DatabaseList,
     ServerList,
+    SqlResult,
     StoredProcedureDefinition,
     StoredProcedureList,
     TableDefinition,
@@ -123,5 +124,17 @@ def create_server(config: AppConfig) -> MCPServer[AppContext]:
         return await _domain_call(
             lambda: service.get_stored_procedure(server, database, name, schema)
         )
+
+    @server.tool(annotations=READ_ONLY)
+    async def execute_sql(
+        server: str,
+        database: str,
+        sql: str,
+        ctx: Context[AppContext],
+        max_rows: int | None = None,
+    ) -> SqlResult:
+        """Run one restricted SELECT on a pii_safe server; protected columns return tokens."""
+        service = ctx.request_context.lifespan_context.service
+        return await _domain_call(lambda: service.execute_sql(server, database, sql, max_rows))
 
     return server

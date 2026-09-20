@@ -11,10 +11,12 @@ MCPServer -> DatabaseService -> EngineRegistry -> SQLAlchemy Core/Inspector -> D
                                -> DatabaseExtras
 ```
 
-Milestone 1 exposes read-only metadata calls only. Milestone 2 will accept a strict `SELECT` subset
-and reach its executor only as a `ValidatedQuery` produced by the security pipeline; the original
-SQL will never be executed. PII keys and policies belong to a server alias, and future tokens are
-authenticated with that alias as associated data so they cannot cross aliases.
+Milestone 1 exposes read-only metadata calls. `execute_sql` accepts a strict `SELECT` subset that
+passes parse, raw-AST allowlist, reflection, lineage, and PII policy stages
+(`security/pipeline.py`). The executor accepts only the resulting `ValidatedQuery`, runs the SQL
+generated from the final AST with separate bind parameters, and never executes the original text.
+PII keys and policies belong to a server alias, and tokens are authenticated with that alias as
+associated data so they cannot cross aliases.
 
 ## Milestones
 

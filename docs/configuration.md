@@ -43,8 +43,7 @@ a startup error.
 
 ## PII-safe servers
 
-`pii_safe` prepares a server alias for the planned PII-safe `execute_sql`; it adds no tool today.
-Such an alias requires its own base64-encoded 32-byte key in the variable named by `pii_key_env`,
+`pii_safe` enables `execute_sql` for a server alias. Such an alias requires its own base64-encoded 32-byte key in the variable named by `pii_key_env`,
 plus `pii.rules` listing the protected columns:
 
 ```powershell
@@ -57,7 +56,7 @@ $env:LEGACY_PROD_PII_KEY = [Convert]::ToBase64String($bytes)
 export LEGACY_PROD_PII_KEY="$(openssl rand -base64 32)"
 ```
 
-A key reused by two aliases is rejected. Tokens will authenticate the alias as associated data, so
+A key reused by two aliases is rejected. Tokens authenticate the alias as associated data, so
 they cannot cross aliases even if keys are duplicated outside normal config loading. Rotating a key
 or renaming an alias will invalidate existing tokens. A `metadata` server must not set
 `pii_key_env` or `pii`.
@@ -78,5 +77,6 @@ Optional, under `runtime:`. A value outside its range is a startup error.
 | `default_max_rows` | 200 | 1-100000, at most `hard_max_rows` |
 | `hard_max_rows` | 1000 | 1-100000 |
 
-`max_sql_chars`, `max_ast_nodes`, `max_joins`, and `max_in_list_items` are accepted but have no
-effect until `execute_sql` ships.
+`max_sql_chars`, `max_ast_nodes`, `max_joins`, and `max_in_list_items` bound the SQL accepted by
+`execute_sql`; a query at the limit is accepted and one above it is rejected. A PII rule without
+`schema` protects the table in every schema.

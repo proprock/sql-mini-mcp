@@ -40,6 +40,22 @@ Validate the example configuration after defining its documented environment var
 uv run sql-mini-mcp --config sql-mini-mcp.example.yaml --check-config
 ```
 
+### Milestone live gate
+
+Per-task work runs the fast suite. A milestone is not closed, marked accepted in the roadmap, or
+merged until the live suite also passes against the running SQL Server container with zero skips:
+
+- every tool the milestone adds or changes has a live test through a real MCP client;
+- every data path it changes (SQL generation, bind parameters, result types, reflection) is
+  exercised with real SQL Server types and rows;
+- rejected inputs are shown not to change a canary object;
+- the run leaves no test logins or schemas behind.
+
+Also run the live suite, or a focused `-k` subset, during a task that changes SQL generation,
+execution, result encoding, reflection, or connection handling: fakes cannot prove those. Record
+the date, image digest, ODBC driver, and test counts in the roadmap acceptance note. Passing is
+never claimed from a skipped or partial run.
+
 The normal Windows live gate starts or reuses the digest-pinned SQL Server 2022 container and keeps
 it running between checks. Test SQL objects and credentials are uniquely named and cleaned after
 each run:
@@ -61,5 +77,11 @@ Explicit local Docker cleanup is separate from the gate and removes the test con
 .\scripts\test-sqlserver.ps1 -Reset
 ```
 
-Security-fast, deep, and mutation commands belong to Milestone 2 and are intentionally absent from
-this metadata-only branch.
+The security suite lives in `tests/security` and runs with the fast suite. Add it explicitly when
+running a subset:
+
+```powershell
+uv run pytest tests/unit tests/contract tests/security -q
+```
+
+The deep, mutation, and writable-fixture gates belong to Milestone 2B and are not defined yet.

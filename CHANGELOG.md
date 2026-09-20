@@ -7,6 +7,13 @@ categories `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, and `Security`.
 
 ## [Unreleased]
 
+### Added
+
+- `execute_sql` tool for `pii_safe` SQL Server aliases. It runs one restricted `SELECT`, returns
+  configured PII columns as alias-bound tokens, accepts those tokens only in `=` and `IN`
+  predicates, and returns at most `max_rows` rows with a `truncated` flag. Servers with
+  `access_level: metadata` return `ACCESS_LEVEL_DENIED`.
+
 ## [0.9.1] - 2026-09-20
 
 ### Added

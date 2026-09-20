@@ -7,11 +7,13 @@ requires-python = ">=3.12,<3.15"
 license = { file = "LICENSE" }
 dependencies = [
     "anyio>=4.8,<5",
+    "cryptography>=46.0.7,<47",
     "mcp>=2,<3",
     "pydantic>=2.10,<3",
     "pyodbc>=5.2,<6",
     "pyyaml>=6,<7",
     "sqlalchemy>=2.0,<3",
+    "sqlglot>=30.18,<31",
 ]
 
 [project.scripts]
@@ -19,6 +21,8 @@ sql-mini-mcp = "sql_mini_mcp.__main__:main"
 
 [dependency-groups]
 dev = [
+    "hypothesis>=6.168,<7",
+    "mutmut>=3.8,<4 ; sys_platform != 'win32'",
     "prek>=0.2",
     "pytest>=8.3,<10",
     "pytest-cov>=6,<8",

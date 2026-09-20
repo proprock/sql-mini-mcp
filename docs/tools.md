@@ -1,6 +1,6 @@
 # Tools
 
-Six read-only tools, each annotated `readOnlyHint=true`. Every tool takes a `server` alias from
+Seven read-only tools, each annotated `readOnlyHint=true`. Every tool takes a `server` alias from
 your configuration. `schema` is optional everywhere: when omitted, the name must resolve to exactly
 one object, otherwise the call fails as ambiguous and lists the candidate schemas.
 
@@ -12,6 +12,7 @@ one object, otherwise the call fails as ambiguous and lists the candidate schema
 | `get_table_definition` | `server`, `database`, `table`, `schema?` | Columns, keys, constraints, and indexes |
 | `list_stored_procedures` | `server`, `database`, `schema?`, `name_contains?` | Procedure names, without definitions |
 | `get_stored_procedure` | `server`, `database`, `name`, `schema?` | The original definition, when visible |
+| `execute_sql` | `server`, `database`, `sql`, `max_rows?` | Columns, rows, `row_count`, `truncated` |
 
 ## Response conventions
 
@@ -31,5 +32,26 @@ bind values, or result rows.
 
 ## What is not here
 
-No tool executes SQL, writes data, or discovers servers, and the catalog is not published as MCP
-resources. PII-safe `execute_sql` is planned; see [ARCHITECTURE.md](../ARCHITECTURE.md).
+No tool writes data or discovers servers, and the catalog is not published as MCP resources.
+
+## execute_sql
+
+Available only for `access_level: pii_safe` servers; a `metadata` server returns
+`ACCESS_LEVEL_DENIED`. It accepts one `SELECT` from a small allowlist: local base tables, direct
+columns and aliases, literals, `COUNT(*)` without `GROUP BY`, `INNER`/`LEFT JOIN ... ON`, `WHERE`
+with `AND`/`OR`, comparisons, `IN` and `IS NULL`, `ORDER BY` on a direct column, and `TOP`.
+Everything else is rejected with `QUERY_REJECTED`: CTEs, subqueries, unions, `DISTINCT`, `GROUP BY`,
+functions, `CASE`, `CAST`, hints, `SELECT INTO`, variables, temporary tables, cross-database
+names, and any syntax not listed.
+
+- `max_rows` defaults to `default_max_rows` and may not exceed `hard_max_rows`. `truncated` is true
+  when more rows existed.
+- A protected column may be projected (with or without an alias) and compared with `=` or `IN`
+  against tokens issued for the same server alias. Plaintext comparison, `ORDER BY`, join keys,
+  functions, and arithmetic on protected columns are rejected.
+- Protected cells are returned as `pii:v1:...` tokens; `NULL` stays `null`. A malformed, tampered,
+  wrong-key, or other-alias token fails with the single error `INVALID_PII_TOKEN`.
+- Each result column reports `name`, `source` (`schema`, `table`, `column`, or `null`),
+  `protected`, and `encoding` (`json`, `token`, `decimal`, `date`, `time`, `datetime`, `uuid`,
+  `base64`).
+- Token values are sent to the database only as bind parameters, never inside the SQL text.

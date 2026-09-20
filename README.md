@@ -50,11 +50,13 @@ data.
 | `get_table_definition` | 🟢 read | Columns, keys, constraints, and indexes of one table |
 | `list_stored_procedures` | 🟢 read | Stored procedures, without definitions |
 | `get_stored_procedure` | 🟢 read | The definition of one stored procedure |
+| `execute_sql` | 🟢 read | One restricted `SELECT` on a `pii_safe` server; protected columns return tokens |
 
 > [!NOTE]
-> **Status: metadata only.** Version 0.9 supports SQL Server only. PII-safe `execute_sql` and
-> MySQL/MariaDB are planned; see [ARCHITECTURE.md](ARCHITECTURE.md). Configuration for
-> MySQL/MariaDB is rejected until it ships.
+> **Status: unreleased `execute_sql`.** Version 0.9 supports SQL Server only. `execute_sql` is
+> implemented on the development branch but has not passed the security hardening gate, so it is
+> not released. MySQL/MariaDB is planned; see [ARCHITECTURE.md](ARCHITECTURE.md). Configuration
+> for MySQL/MariaDB is rejected until it ships.
 
 - [Install](#install)
 - [Configure](#configure)

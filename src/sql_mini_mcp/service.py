@@ -4,7 +4,7 @@ import logging
 from collections.abc import Callable
 from typing import TypeVar
 
-from sqlalchemy import Engine
+from sqlalchemy import Connection, Engine
 from sqlalchemy.exc import DBAPIError, OperationalError, SQLAlchemyError
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
@@ -15,10 +15,13 @@ from sql_mini_mcp.db.reflection import list_tables as reflect_tables
 from sql_mini_mcp.db.registry import EngineRegistry
 from sql_mini_mcp.errors import DomainError, ErrorCode
 from sql_mini_mcp.models import (
+    ColumnSource,
     DatabaseList,
     DatabaseSummary,
     ServerList,
     ServerSummary,
+    SqlColumn,
+    SqlResult,
     StoredProcedureDefinition,
     StoredProcedureList,
     StoredProcedureSummary,
@@ -26,8 +29,15 @@ from sql_mini_mcp.models import (
     TableList,
     TableSummary,
 )
+from sql_mini_mcp.security.executor import execute_validated
+from sql_mini_mcp.security.pipeline import validate_sql
+from sql_mini_mcp.security.schema import ReflectedCatalog, SchemaCache, TableCatalog
+from sql_mini_mcp.security.tokens import TokenKeyRegistry
 
 logger = logging.getLogger(__name__)
+CatalogFactory = Callable[[Connection, str, str], TableCatalog]
+_SCHEMA_CACHE_ENTRIES = 1024
+_SCHEMA_CACHE_TTL_SECONDS = 300.0
 T = TypeVar("T")
 
 
@@ -36,9 +46,20 @@ def _contains(value: str, needle: str | None) -> bool:
 
 
 class DatabaseService:
-    def __init__(self, config: AppConfig, registry: EngineRegistry) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        registry: EngineRegistry,
+        catalog_factory: CatalogFactory | None = None,
+    ) -> None:
         self.config = config
         self.registry = registry
+        self._tokens = TokenKeyRegistry.from_config(config)
+        self._schema_cache = SchemaCache(_SCHEMA_CACHE_ENTRIES, _SCHEMA_CACHE_TTL_SECONDS)
+        self._catalog_factory = catalog_factory or self._reflected_catalog
+
+    def _reflected_catalog(self, connection: Connection, alias: str, database: str) -> TableCatalog:
+        return ReflectedCatalog(connection, self._schema_cache, alias, database)
 
     def _server(self, alias: str) -> ServerConfig:
         try:
@@ -244,3 +265,54 @@ class DatabaseService:
                 "Stored procedure definition exceeds the configured response limit.",
             )
         return result
+
+    async def execute_sql(
+        self, server: str, database: str, sql: str, max_rows: int | None = None
+    ) -> SqlResult:
+        configured = self._server(server)
+        if configured.access_level != "pii_safe" or configured.pii is None:
+            raise DomainError(
+                ErrorCode.ACCESS_LEVEL_DENIED,
+                "execute_sql is available only for pii_safe servers.",
+                "Use a server configured with access_level pii_safe.",
+            )
+        runtime = self.config.runtime
+        rows_limit = runtime.default_max_rows if max_rows is None else max_rows
+        codec = self._tokens.codec_for(server)
+        pii = configured.pii
+
+        def operation(engine: Engine) -> SqlResult:
+            with engine.connect() as connection:
+                validated = validate_sql(
+                    sql,
+                    alias=server,
+                    database=database,
+                    catalog=self._catalog_factory(connection, server, database),
+                    pii_config=pii,
+                    codec=codec,
+                    runtime=runtime,
+                    max_rows=rows_limit,
+                )
+                executed = execute_validated(connection, validated, codec)
+            return SqlResult(
+                columns=[
+                    SqlColumn(
+                        name=column.name,
+                        source=None
+                        if column.source is None
+                        else ColumnSource(
+                            schema=column.source.schema,
+                            table=column.source.table,
+                            column=column.source.column,
+                        ),
+                        protected=column.protected,
+                        encoding=column.encoding,
+                    )
+                    for column in executed.columns
+                ],
+                rows=[list(row) for row in executed.rows],
+                row_count=len(executed.rows),
+                truncated=executed.truncated,
+            )
+
+        return await self._run(server, database, operation)

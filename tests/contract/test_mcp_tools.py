@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+from collections.abc import Callable, Sequence
 from typing import Any
 
 from mcp import Client
@@ -34,6 +36,7 @@ def test_metadata_tool_contracts_and_structured_output() -> None:
                 "get_table_definition",
                 "list_stored_procedures",
                 "get_stored_procedure",
+                "execute_sql",
             ]
             expected_inputs = {
                 "list_servers": (set(), set()),
@@ -53,6 +56,10 @@ def test_metadata_tool_contracts_and_structured_output() -> None:
                 "get_stored_procedure": (
                     {"server", "database", "name", "schema"},
                     {"server", "database", "name"},
+                ),
+                "execute_sql": (
+                    {"server", "database", "sql", "max_rows"},
+                    {"server", "database", "sql"},
                 ),
             }
             for tool in listing.tools:
@@ -114,5 +121,189 @@ def test_domain_error_is_visible_as_tool_error_without_internal_details() -> Non
             assert isinstance(content, TextContent)
             assert "[UNKNOWN_SERVER]" in content.text
             assert "password" not in content.text
+
+    asyncio.run(scenario())
+
+
+KEY = bytes(range(32))
+
+
+def _secure_config() -> AppConfig:
+    return AppConfig.model_validate(
+        {
+            "version": 1,
+            "servers": {
+                "legacy": {
+                    "engine": "sqlserver",
+                    "connection_url": "mssql+pyodbc://u:p@sql/master?driver=x",
+                },
+                "secure": {
+                    "engine": "sqlserver",
+                    "access_level": "pii_safe",
+                    "connection_url": "mssql+pyodbc://u:p@sql/master?driver=x",
+                    "pii_key_env": "K",
+                    "pii_key": base64.b64encode(KEY).decode(),
+                    "pii": {
+                        "rules": [
+                            {
+                                "database": "*",
+                                "schema": "dbo",
+                                "table": "Users",
+                                "columns": ["Email"],
+                            }
+                        ]
+                    },
+                },
+            },
+        }
+    )
+
+
+class _Result:
+    def __init__(self, keys: list[str], rows: list[tuple[Any, ...]]) -> None:
+        self._keys, self._rows = keys, rows
+
+    def keys(self) -> list[str]:
+        return self._keys
+
+    def fetchmany(self, size: int) -> list[tuple[Any, ...]]:
+        return self._rows[:size]
+
+    def close(self) -> None:
+        pass
+
+
+class _Connection:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, tuple[Any, ...]]] = []
+
+    def exec_driver_sql(self, statement: str, parameters: tuple[Any, ...]) -> _Result:
+        self.calls.append((statement, parameters))
+        return _Result(["Id", "Email"], [(1, "a@b.c")])
+
+    def __enter__(self) -> _Connection:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+
+class _Catalog:
+    def list_tables(self) -> list[tuple[str, str]]:
+        return [("dbo", "Users")]
+
+    def columns(self, schema: str, table: str) -> Sequence[str]:
+        return ["Id", "Email"]
+
+
+def _patch_database(monkeypatch: Any, connection: _Connection) -> None:
+    from sql_mini_mcp import mcp_server
+    from sql_mini_mcp.service import DatabaseService
+
+    class Engine:
+        def connect(self) -> _Connection:
+            return connection
+
+    class Registry:
+        def __init__(self, config: AppConfig) -> None:
+            self.config = config
+
+        async def run(self, alias: str, database: str | None, operation: Callable[..., Any]) -> Any:
+            return operation(Engine())
+
+        def dispose(self) -> None:
+            pass
+
+    monkeypatch.setattr(mcp_server, "EngineRegistry", Registry)
+    monkeypatch.setattr(
+        mcp_server,
+        "DatabaseService",
+        lambda config, registry: DatabaseService(
+            config, registry, catalog_factory=lambda *_: _Catalog()
+        ),
+    )
+
+
+def test_execute_sql_returns_structured_result_with_tokens(monkeypatch: Any) -> None:
+    connection = _Connection()
+    _patch_database(monkeypatch, connection)
+
+    async def scenario() -> None:
+        async with Client(create_server(_secure_config()), raise_exceptions=True) as client:
+            result = await client.call_tool(
+                "execute_sql",
+                {"server": "secure", "database": "app", "sql": "SELECT Id, Email FROM Users"},
+            )
+            assert result.is_error is False
+            content = result.structured_content
+            assert content is not None
+            assert content["row_count"] == 1
+            assert content["truncated"] is False
+            assert [c["name"] for c in content["columns"]] == ["Id", "Email"]
+            assert content["columns"][1]["protected"] is True
+            assert content["columns"][1]["encoding"] == "token"
+            assert content["columns"][1]["source"] == {
+                "schema": "dbo",
+                "table": "Users",
+                "column": "Email",
+            }
+            assert content["rows"][0][0] == 1
+            assert content["rows"][0][1].startswith("pii:v1:")
+            assert "a@b.c" not in str(content)
+
+    asyncio.run(scenario())
+
+
+def test_execute_sql_denied_for_metadata_alias(monkeypatch: Any) -> None:
+    connection = _Connection()
+    _patch_database(monkeypatch, connection)
+
+    async def scenario() -> None:
+        async with Client(create_server(_secure_config()), raise_exceptions=True) as client:
+            result = await client.call_tool(
+                "execute_sql",
+                {"server": "legacy", "database": "app", "sql": "SELECT Id FROM Users"},
+            )
+            assert result.is_error is True
+            content = result.content[0]
+            assert isinstance(content, TextContent)
+            assert "[ACCESS_LEVEL_DENIED]" in content.text
+
+    asyncio.run(scenario())
+    assert connection.calls == []
+
+
+def test_execute_sql_rejected_query_is_a_tool_error_without_execution(monkeypatch: Any) -> None:
+    connection = _Connection()
+    _patch_database(monkeypatch, connection)
+
+    async def scenario() -> None:
+        async with Client(create_server(_secure_config()), raise_exceptions=True) as client:
+            result = await client.call_tool(
+                "execute_sql",
+                {"server": "secure", "database": "app", "sql": "DROP TABLE Users"},
+            )
+            assert result.is_error is True
+            content = result.content[0]
+            assert isinstance(content, TextContent)
+            assert "[QUERY_REJECTED]" in content.text
+
+    asyncio.run(scenario())
+    assert connection.calls == []
+
+
+def test_execute_sql_output_schema_is_typed(monkeypatch: Any) -> None:
+    async def scenario() -> None:
+        async with Client(create_server(_secure_config()), raise_exceptions=True) as client:
+            tool = next(t for t in (await client.list_tools()).tools if t.name == "execute_sql")
+            assert tool.annotations is not None
+            assert tool.annotations.read_only_hint is True
+            assert tool.output_schema is not None
+            assert set(tool.output_schema["properties"]) == {
+                "columns",
+                "rows",
+                "row_count",
+                "truncated",
+            }
 
     asyncio.run(scenario())
