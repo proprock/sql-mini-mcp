@@ -17,12 +17,12 @@ from support import (
     _SpyRegistry,
 )
 
-from sql_mini_mcp.config import AppConfig, PiiConfig, PiiRule
-from sql_mini_mcp.db.registry import EngineRegistry
-from sql_mini_mcp.security.dialect import MYSQL
-from sql_mini_mcp.security.pipeline import validate_sql
-from sql_mini_mcp.security.validated_query import ValidatedQuery
-from sql_mini_mcp.service import DatabaseService
+from sql_safe_mcp.config import AppConfig, PiiConfig, PiiRule
+from sql_safe_mcp.db.registry import EngineRegistry
+from sql_safe_mcp.security.dialect import MYSQL
+from sql_safe_mcp.security.pipeline import validate_sql
+from sql_safe_mcp.security.validated_query import ValidatedQuery
+from sql_safe_mcp.service import DatabaseService
 
 MYSQL_PII = PiiConfig(
     rules=[

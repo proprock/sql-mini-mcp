@@ -8,10 +8,10 @@ from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp_types import ToolAnnotations
 
-from sql_mini_mcp.config import AppConfig
-from sql_mini_mcp.db.registry import EngineRegistry
-from sql_mini_mcp.errors import DomainError
-from sql_mini_mcp.models import (
+from sql_safe_mcp.config import AppConfig
+from sql_safe_mcp.db.registry import EngineRegistry
+from sql_safe_mcp.errors import DomainError
+from sql_safe_mcp.models import (
     DatabaseList,
     ServerList,
     SqlResult,
@@ -20,7 +20,7 @@ from sql_mini_mcp.models import (
     TableDefinition,
     TableList,
 )
-from sql_mini_mcp.service import DatabaseService
+from sql_safe_mcp.service import DatabaseService
 
 READ_ONLY = ToolAnnotations(read_only_hint=True, open_world_hint=False)
 
@@ -48,7 +48,7 @@ def create_server(config: AppConfig) -> MCPServer[AppContext]:
             registry.dispose()
 
     server: MCPServer[AppContext] = MCPServer(
-        "sql-mini-mcp",
+        "sql-safe-mcp",
         description="Minimal, read-only, PII-safe SQL database navigation.",
         version="1.1.0",
         lifespan=lifespan,

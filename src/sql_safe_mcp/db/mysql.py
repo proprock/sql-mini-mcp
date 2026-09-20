@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from sqlalchemy import Connection, text
 
-from sql_mini_mcp.db.extras import DatabaseExtras
-from sql_mini_mcp.models import StoredProcedureDefinition, StoredProcedureSummary
+from sql_safe_mcp.db.extras import DatabaseExtras
+from sql_safe_mcp.models import StoredProcedureDefinition, StoredProcedureSummary
 
 SYSTEM_DATABASES = ("information_schema", "mysql", "performance_schema", "sys")
 

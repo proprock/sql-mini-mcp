@@ -4,11 +4,11 @@ from dataclasses import dataclass, field
 
 from sqlglot import exp
 
-from sql_mini_mcp.config import PiiConfig
-from sql_mini_mcp.security.lineage import AnalyzedQuery, ColumnRef, SourceColumn
-from sql_mini_mcp.security.parser import reject
-from sql_mini_mcp.security.reasons import Reason
-from sql_mini_mcp.security.tokens import PREFIX, TokenCodec
+from sql_safe_mcp.config import PiiConfig
+from sql_safe_mcp.security.lineage import AnalyzedQuery, ColumnRef, SourceColumn
+from sql_safe_mcp.security.parser import reject
+from sql_safe_mcp.security.reasons import Reason
+from sql_safe_mcp.security.tokens import PREFIX, TokenCodec
 
 
 @dataclass(frozen=True, slots=True)

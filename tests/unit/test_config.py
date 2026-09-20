@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from sql_mini_mcp.config import load_config
-from sql_mini_mcp.errors import DomainError
+from sql_safe_mcp.config import load_config
+from sql_safe_mcp.errors import DomainError
 
 
 def _key(byte: int) -> str:

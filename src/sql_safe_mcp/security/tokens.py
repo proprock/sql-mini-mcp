@@ -11,8 +11,8 @@ from uuid import UUID
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from sql_mini_mcp.config import AppConfig
-from sql_mini_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.config import AppConfig
+from sql_safe_mcp.errors import DomainError, ErrorCode
 
 PREFIX = "pii:v1:"
 MAX_TOKEN_CHARS = 4096

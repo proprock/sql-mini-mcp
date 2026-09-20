@@ -9,11 +9,11 @@ from decimal import Decimal
 from typing import Any, Protocol
 from uuid import UUID
 
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.models import ResultEncoding
-from sql_mini_mcp.security.lineage import SourceColumn
-from sql_mini_mcp.security.tokens import TokenCodec
-from sql_mini_mcp.security.validated_query import ValidatedQuery
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.models import ResultEncoding
+from sql_safe_mcp.security.lineage import SourceColumn
+from sql_safe_mcp.security.tokens import TokenCodec
+from sql_safe_mcp.security.validated_query import ValidatedQuery
 
 
 class _Result(Protocol):

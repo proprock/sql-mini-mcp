@@ -14,12 +14,12 @@ import pytest
 from attack_lab import FORBIDDEN_ON_THE_WIRE, AttackLab
 from corpus_support import TokenSources, expand, load_cases
 
-from sql_mini_mcp.config import AppConfig
-from sql_mini_mcp.db.registry import EngineRegistry
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.models import SqlResult
-from sql_mini_mcp.security.tokens import TokenCodec
-from sql_mini_mcp.service import DatabaseService
+from sql_safe_mcp.config import AppConfig
+from sql_safe_mcp.db.registry import EngineRegistry
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.models import SqlResult
+from sql_safe_mcp.security.tokens import TokenCodec
+from sql_safe_mcp.service import DatabaseService
 
 pytestmark = pytest.mark.integration
 
@@ -47,8 +47,8 @@ def digest(state: dict[str, Any]) -> str:
 
 
 def write_artifact(name: str, payload: dict[str, Any]) -> None:
-    """Attach audit evidence for the review when SQL_MINI_MCP_AUDIT_DIR is set."""
-    directory = os.environ.get("SQL_MINI_MCP_AUDIT_DIR")
+    """Attach audit evidence for the review when SQL_SAFE_MCP_AUDIT_DIR is set."""
+    directory = os.environ.get("SQL_SAFE_MCP_AUDIT_DIR")
     if not directory:
         return
     target = Path(directory)

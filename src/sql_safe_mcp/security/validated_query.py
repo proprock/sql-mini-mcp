@@ -7,19 +7,19 @@ from typing import Any, Literal, NoReturn
 
 from sqlglot import exp
 
-from sql_mini_mcp.config import RuntimeConfig
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.security.dialect import SQLSERVER, SqlDialect
-from sql_mini_mcp.security.lineage import AnalyzedQuery, SourceColumn
-from sql_mini_mcp.security.parser import (
+from sql_safe_mcp.config import RuntimeConfig
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.security.dialect import SQLSERVER, SqlDialect
+from sql_safe_mcp.security.lineage import AnalyzedQuery, SourceColumn
+from sql_safe_mcp.security.parser import (
     ParserLimits,
     check_limits,
     reject,
     validate_allowlist,
 )
-from sql_mini_mcp.security.policy import PolicyDecision
-from sql_mini_mcp.security.reasons import Reason
-from sql_mini_mcp.security.tokens import PREFIX
+from sql_safe_mcp.security.policy import PolicyDecision
+from sql_safe_mcp.security.reasons import Reason
+from sql_safe_mcp.security.tokens import PREFIX
 
 _SEAL = object()
 

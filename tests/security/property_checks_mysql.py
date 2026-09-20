@@ -25,10 +25,10 @@ from support import (
 )
 from support_mysql import spy_mysql_service, validate_mysql
 
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.security.dialect import MYSQL
-from sql_mini_mcp.security.parser import ParserLimits, parse_select, validate_allowlist
-from sql_mini_mcp.security.tokens import PREFIX
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.security.dialect import MYSQL
+from sql_safe_mcp.security.parser import ParserLimits, parse_select, validate_allowlist
+from sql_safe_mcp.security.tokens import PREFIX
 
 SPY = SpyConnection()
 SERVICE = spy_mysql_service(SPY)

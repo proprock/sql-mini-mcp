@@ -10,8 +10,8 @@ $ErrorActionPreference = "Stop"
 $composeFile = Join-Path $PSScriptRoot "..\compose.mysql.yml"
 $exitCode = 1
 $services = @{
-    mysql   = "SQL_MINI_MCP_TEST_MYSQL_URL"
-    mariadb = "SQL_MINI_MCP_TEST_MARIADB_URL"
+    mysql   = "SQL_SAFE_MCP_TEST_MYSQL_URL"
+    mariadb = "SQL_SAFE_MCP_TEST_MARIADB_URL"
 }
 
 try {
@@ -20,7 +20,7 @@ try {
         throw "Docker daemon is not ready. Start Docker Desktop and retry."
     }
 
-    $env:SQL_MINI_MCP_DOCKER_ROOT_PASSWORD = "SqlMiniMcpProbe1"
+    $env:SQL_SAFE_MCP_DOCKER_ROOT_PASSWORD = "SqlSafeMcpProbe1"
     if ($Reset) {
         docker compose -f $composeFile down --volumes --remove-orphans
         exit $LASTEXITCODE
@@ -40,9 +40,9 @@ try {
         $password = $passwordEntry.Substring("MYSQL_ROOT_PASSWORD=".Length)
     }
     else {
-        $password = "SqlMiniMcp" + [Guid]::NewGuid().ToString("N")
+        $password = "SqlSafeMcp" + [Guid]::NewGuid().ToString("N")
     }
-    $env:SQL_MINI_MCP_DOCKER_ROOT_PASSWORD = $password
+    $env:SQL_SAFE_MCP_DOCKER_ROOT_PASSWORD = $password
 
     docker compose -f $composeFile up -d --wait
     if ($LASTEXITCODE -ne 0) {
@@ -68,7 +68,7 @@ finally {
     foreach ($name in $services.Values) {
         Remove-Item ("Env:" + $name) -ErrorAction SilentlyContinue
     }
-    Remove-Item Env:SQL_MINI_MCP_DOCKER_ROOT_PASSWORD -ErrorAction SilentlyContinue
+    Remove-Item Env:SQL_SAFE_MCP_DOCKER_ROOT_PASSWORD -ErrorAction SilentlyContinue
 }
 
 exit $exitCode

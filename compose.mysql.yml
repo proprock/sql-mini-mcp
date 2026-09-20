@@ -1,9 +1,9 @@
-name: sql-mini-mcp-mysql
+name: sql-safe-mcp-mysql
 services:
   mysql:
     image: mysql:8.4@sha256:85b9bf2e29cf836ecb8c2a15a935d4ba0c606631dff1dd79531a11983c638f2a
     environment:
-      MYSQL_ROOT_PASSWORD: ${SQL_MINI_MCP_DOCKER_ROOT_PASSWORD:?set by scripts/test-mysql.ps1}
+      MYSQL_ROOT_PASSWORD: ${SQL_SAFE_MCP_DOCKER_ROOT_PASSWORD:?set by scripts/test-mysql.ps1}
     ports:
       - "127.0.0.1::3306"
     healthcheck:
@@ -18,7 +18,7 @@ services:
   mariadb:
     image: mariadb:11.4@sha256:70cc072b29b4a89ae07abb2d4da2c64678a7f2dfe092751bb51c87d67dc1338b
     environment:
-      MARIADB_ROOT_PASSWORD: ${SQL_MINI_MCP_DOCKER_ROOT_PASSWORD:?set by scripts/test-mysql.ps1}
+      MARIADB_ROOT_PASSWORD: ${SQL_SAFE_MCP_DOCKER_ROOT_PASSWORD:?set by scripts/test-mysql.ps1}
     ports:
       - "127.0.0.1::3306"
     healthcheck:

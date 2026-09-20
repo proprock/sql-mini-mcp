@@ -8,8 +8,8 @@ from typing import Any, TypeVar
 import anyio
 from sqlalchemy import Engine, create_engine, event
 
-from sql_mini_mcp.config import AppConfig
-from sql_mini_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.config import AppConfig
+from sql_safe_mcp.errors import DomainError, ErrorCode
 
 T = TypeVar("T")
 

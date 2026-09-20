@@ -23,7 +23,7 @@ test suite.
 For a behavior-changing implementation phase, review statement and branch coverage separately:
 
 ```powershell
-uv run pytest tests/unit tests/contract --cov=sql_mini_mcp --cov-branch --cov-report=term-missing
+uv run pytest tests/unit tests/contract --cov=sql_safe_mcp --cov-branch --cov-report=term-missing
 ```
 
 Coverage does not replace behavioral assertions. Review the missing-line report, add relevant
@@ -37,7 +37,7 @@ they remain an explicit local or externally managed disposable-database gate.
 Validate the example configuration after defining its documented environment variables:
 
 ```powershell
-uv run sql-mini-mcp --config sql-mini-mcp.example.yaml --check-config
+uv run sql-safe-mcp --config sql-safe-mcp.example.yaml --check-config
 ```
 
 ### Milestone live gate
@@ -67,12 +67,12 @@ each run:
 For an externally managed disposable SQL Server, define the admin URL directly:
 
 ```powershell
-$env:SQL_MINI_MCP_TEST_SQLSERVER_URL = "mssql+pyodbc://..."
+$env:SQL_SAFE_MCP_TEST_SQLSERVER_URL = "mssql+pyodbc://..."
 uv run pytest tests/integration/sqlserver -m integration
 ```
 
 MySQL and MariaDB have their own digest-pinned containers (`compose.mysql.yml`, project
-`sql-mini-mcp-mysql`) and gate. It runs the same live checks against both engines with zero skips
+`sql-safe-mcp-mysql`) and gate. It runs the same live checks against both engines with zero skips
 and cleans its uniquely named databases and logins; changes to `MySqlExtras`, MySQL reflection, or
 PyMySQL connection handling require it, and the milestone live gate requires it in addition to the
 SQL Server run:
@@ -86,8 +86,8 @@ tokenized projection, token predicates, injection payloads as binds, `%` and bac
 (also with `NO_BACKSLASH_ESCAPES` set server-wide), native result types, rejected-query canary,
 and per-alias token isolation.
 
-Externally managed servers use `SQL_MINI_MCP_TEST_MYSQL_URL` and
-`SQL_MINI_MCP_TEST_MARIADB_URL` with `uv run pytest tests/integration/mysql -m integration`.
+Externally managed servers use `SQL_SAFE_MCP_TEST_MYSQL_URL` and
+`SQL_SAFE_MCP_TEST_MARIADB_URL` with `uv run pytest tests/integration/mysql -m integration`.
 `.\scripts\test-mysql.ps1 -Reset` removes the containers and volumes.
 
 The release matrix starts (or reuses) all three containers, sets all three URLs, and runs every
@@ -144,5 +144,5 @@ proof. Message wording is pinned through the fixed `Reason` catalog, so mutation
 string is not accepted as equivalent. An interrupted run is not evidence.
 
 The writable-credential attack fixture (`tests/integration/sqlserver/test_live_attack.py`) runs as
-part of the live gate and writes audit artifacts to `%TEMP%\sql-mini-mcp-audit`; attach them to the
+part of the live gate and writes audit artifacts to `%TEMP%\sql-safe-mcp-audit`; attach them to the
 review.

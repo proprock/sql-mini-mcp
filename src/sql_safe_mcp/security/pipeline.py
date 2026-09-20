@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from sql_mini_mcp.config import PiiConfig, RuntimeConfig
-from sql_mini_mcp.security.dialect import SqlDialect
-from sql_mini_mcp.security.lineage import analyze_query
-from sql_mini_mcp.security.parser import ParserLimits, parse_select
-from sql_mini_mcp.security.policy import PiiPolicy
-from sql_mini_mcp.security.schema import TableCatalog, resolve_tables
-from sql_mini_mcp.security.tokens import TokenCodec
-from sql_mini_mcp.security.validated_query import ValidatedQuery, issue_validated_query
+from sql_safe_mcp.config import PiiConfig, RuntimeConfig
+from sql_safe_mcp.security.dialect import SqlDialect
+from sql_safe_mcp.security.lineage import analyze_query
+from sql_safe_mcp.security.parser import ParserLimits, parse_select
+from sql_safe_mcp.security.policy import PiiPolicy
+from sql_safe_mcp.security.schema import TableCatalog, resolve_tables
+from sql_safe_mcp.security.tokens import TokenCodec
+from sql_safe_mcp.security.validated_query import ValidatedQuery, issue_validated_query
 
 
 def validate_sql(

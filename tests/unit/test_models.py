@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sql_mini_mcp.models import (
+from sql_safe_mcp.models import (
     ColumnDefinition,
     ForeignKeyDefinition,
     IndexDefinition,

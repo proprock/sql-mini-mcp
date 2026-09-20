@@ -13,9 +13,9 @@ from corpus_support import MYSQL_CORPUS, TokenSources, expand, load_cases
 from support import FOREIGN, OTHER_KEY, OWN, SpyConnection
 from support_mysql import spy_mysql_service
 
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.security.tokens import PREFIX, TokenCodec
-from sql_mini_mcp.service import DatabaseService
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.security.tokens import PREFIX, TokenCodec
+from sql_safe_mcp.service import DatabaseService
 
 TOKENS = TokenSources(OWN, FOREIGN, TokenCodec("srv", OTHER_KEY))
 MYSQL_CASES = load_cases(MYSQL_CORPUS)

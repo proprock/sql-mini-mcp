@@ -66,7 +66,7 @@ jobs:
         run: uv run pytest tests/unit tests/contract -q
 
       - name: pytest --cov (unit and contract)
-        run: uv run pytest tests/unit tests/contract --cov=sql_mini_mcp --cov-branch --cov-report=term-missing
+        run: uv run pytest tests/unit tests/contract --cov=sql_safe_mcp --cov-branch --cov-report=term-missing
 
   package:
     name: Build and verify distribution
@@ -89,7 +89,7 @@ jobs:
 
       - name: Create synthetic configuration
         run: |
-          cat > /tmp/sql-mini-mcp-config.yaml <<'EOF'
+          cat > /tmp/sql-safe-mcp-config.yaml <<'EOF'
           version: 1
           servers:
             ci-metadata:
@@ -101,13 +101,13 @@ jobs:
         run: |
           python -m venv /tmp/verify-sdist
           /tmp/verify-sdist/bin/pip install --quiet dist/*.tar.gz
-          /tmp/verify-sdist/bin/sql-mini-mcp --config /tmp/sql-mini-mcp-config.yaml --check-config
+          /tmp/verify-sdist/bin/sql-safe-mcp --config /tmp/sql-safe-mcp-config.yaml --check-config
 
       - name: Verify wheel installs cleanly and validates configuration
         run: |
           python -m venv /tmp/verify-wheel
           /tmp/verify-wheel/bin/pip install --quiet dist/*.whl
-          /tmp/verify-wheel/bin/sql-mini-mcp --config /tmp/sql-mini-mcp-config.yaml --check-config
+          /tmp/verify-wheel/bin/sql-safe-mcp --config /tmp/sql-safe-mcp-config.yaml --check-config
 
       - name: Upload distribution artifacts
         uses: actions/upload-artifact@v7

@@ -1107,7 +1107,7 @@ wheels = [
 ]
 
 [[package]]
-name = "sql-mini-mcp"
+name = "sql-safe-mcp"
 version = "1.1.0"
 source = { editable = "." }
 dependencies = [

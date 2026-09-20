@@ -9,7 +9,7 @@ from typing import Any
 
 import yaml
 
-from sql_mini_mcp.security.tokens import PREFIX, TokenCodec
+from sql_safe_mcp.security.tokens import PREFIX, TokenCodec
 
 CORPUS = Path(__file__).parent / "corpus"
 MYSQL_CORPUS = Path(__file__).parent / "corpus_mysql"

@@ -11,10 +11,10 @@ from sqlalchemy import Connection, inspect
 from sqlalchemy.exc import NoSuchTableError
 from sqlglot import exp
 
-from sql_mini_mcp.db.reflection import list_tables as reflect_tables
-from sql_mini_mcp.security.dialect import SQLSERVER, SqlDialect
-from sql_mini_mcp.security.parser import reject
-from sql_mini_mcp.security.reasons import Reason
+from sql_safe_mcp.db.reflection import list_tables as reflect_tables
+from sql_safe_mcp.security.dialect import SQLSERVER, SqlDialect
+from sql_safe_mcp.security.parser import reject
+from sql_safe_mcp.security.reasons import Reason
 
 
 @dataclass(frozen=True, slots=True)

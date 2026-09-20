@@ -4,10 +4,10 @@ from typing import ClassVar
 import pytest
 from sqlglot import exp
 
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.security.lineage import AnalyzedQuery, SourceColumn, analyze_query
-from sql_mini_mcp.security.parser import ParserLimits, parse_select
-from sql_mini_mcp.security.schema import resolve_tables
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.security.lineage import AnalyzedQuery, SourceColumn, analyze_query
+from sql_safe_mcp.security.parser import ParserLimits, parse_select
+from sql_safe_mcp.security.schema import resolve_tables
 
 LIMITS = ParserLimits(4096, 500, 4, 10)
 
@@ -164,7 +164,7 @@ def test_input_query_is_not_mutated() -> None:
 
 
 def test_result_query_passes_the_allowlist_again() -> None:
-    from sql_mini_mcp.security.parser import validate_allowlist
+    from sql_safe_mcp.security.parser import validate_allowlist
 
     validate_allowlist(analyze("SELECT * FROM Users WHERE Id IN (1, 2)").query)
 

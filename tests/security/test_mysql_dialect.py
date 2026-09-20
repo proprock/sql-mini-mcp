@@ -9,11 +9,11 @@ import pytest
 import sqlglot
 from support import ALIAS, DATABASE, OWN, RUNTIME
 
-from sql_mini_mcp.config import PiiConfig, PiiRule
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.security.dialect import MYSQL, SQLSERVER, dialect_for
-from sql_mini_mcp.security.pipeline import validate_sql
-from sql_mini_mcp.security.validated_query import ValidatedQuery
+from sql_safe_mcp.config import PiiConfig, PiiRule
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.security.dialect import MYSQL, SQLSERVER, dialect_for
+from sql_safe_mcp.security.pipeline import validate_sql
+from sql_safe_mcp.security.validated_query import ValidatedQuery
 
 MYSQL_PII = PiiConfig(rules=[PiiRule(database="*", table="users", columns=["email", "phone"])])
 

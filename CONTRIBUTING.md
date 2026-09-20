@@ -25,8 +25,8 @@ Requires Python 3.12+, [uv](https://docs.astral.sh/uv/), and Microsoft ODBC Driv
 for the live tests.
 
 ```bash
-git clone https://github.com/proprock/sql-mini-mcp
-cd sql-mini-mcp
+git clone https://github.com/proprock/sql-safe-mcp
+cd sql-safe-mcp
 uv sync --all-groups --locked
 ```
 
@@ -50,7 +50,7 @@ uv run ruff format --check .
 uv run ruff check .
 uv run ty check
 uv run pytest tests/unit tests/contract -q
-uv run pytest tests/unit tests/contract --cov=sql_mini_mcp --cov-branch --cov-report=term-missing
+uv run pytest tests/unit tests/contract --cov=sql_safe_mcp --cov-branch --cov-report=term-missing
 ```
 
 `uv run ruff format .` applies formatting. The last command reports statement and branch coverage
@@ -78,7 +78,7 @@ SQL Server 2022 container, which needs Docker Desktop in Linux-container mode:
 
 Each run creates uniquely named objects and removes them afterwards; `-Reset` also removes the
 container and its volume. To use an external disposable server instead, set
-`SQL_MINI_MCP_TEST_SQLSERVER_URL` and run `uv run pytest tests/integration/sqlserver -m integration`.
+`SQL_SAFE_MCP_TEST_SQLSERVER_URL` and run `uv run pytest tests/integration/sqlserver -m integration`.
 Details are in [CHECKS.md](CHECKS.md).
 
 MySQL and MariaDB have their own digest-pinned containers and script, and the release matrix runs
@@ -128,7 +128,7 @@ one. Name the tool or setting in the entry.
 
 Semantic versioning, Conventional Commits, short-lived branches, pull-request CI, and tagged
 releases. Each tag is a GitHub Release with CI-checked wheel and source distributions attached, and
-it is published to [PyPI](https://pypi.org/project/sql-mini-mcp/) and the MCP Registry by the
+it is published to [PyPI](https://pypi.org/project/sql-safe-mcp/) and the MCP Registry by the
 release workflow.
 
 Releases are cut by the maintainer, and closing a milestone always means a release (see

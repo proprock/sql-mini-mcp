@@ -7,9 +7,9 @@ from uuid import UUID
 import pytest
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from sql_mini_mcp.config import AppConfig
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.security.tokens import MAX_TOKEN_CHARS, TokenCodec, TokenKeyRegistry
+from sql_safe_mcp.config import AppConfig
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.security.tokens import MAX_TOKEN_CHARS, TokenCodec, TokenKeyRegistry
 
 KEY = bytes(range(32))
 OTHER_KEY = bytes(range(1, 33))

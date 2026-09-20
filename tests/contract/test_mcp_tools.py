@@ -9,8 +9,8 @@ from mcp import Client
 from mcp_types import TextContent
 from pydantic import SecretStr
 
-from sql_mini_mcp.config import AppConfig, ServerConfig
-from sql_mini_mcp.mcp_server import create_server
+from sql_safe_mcp.config import AppConfig, ServerConfig
+from sql_safe_mcp.mcp_server import create_server
 
 
 def _config() -> AppConfig:
@@ -99,7 +99,7 @@ def test_mcp_lifespan_disposes_registry(monkeypatch: Any) -> None:
         def dispose(self) -> None:
             self.disposed = True
 
-    monkeypatch.setattr("sql_mini_mcp.mcp_server.EngineRegistry", RecordingRegistry)
+    monkeypatch.setattr("sql_safe_mcp.mcp_server.EngineRegistry", RecordingRegistry)
 
     async def scenario() -> None:
         async with Client(create_server(_config()), raise_exceptions=True) as client:
@@ -197,8 +197,8 @@ class _Catalog:
 
 
 def _patch_database(monkeypatch: Any, connection: _Connection) -> None:
-    from sql_mini_mcp import mcp_server
-    from sql_mini_mcp.service import DatabaseService
+    from sql_safe_mcp import mcp_server
+    from sql_safe_mcp.service import DatabaseService
 
     class Engine:
         def connect(self) -> _Connection:

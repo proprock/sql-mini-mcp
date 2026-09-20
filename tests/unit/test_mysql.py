@@ -7,8 +7,8 @@ from typing import Any, cast
 import pytest
 from sqlalchemy import Connection
 
-from sql_mini_mcp.db.extras import extras_for
-from sql_mini_mcp.db.mysql import MySqlExtras
+from sql_safe_mcp.db.extras import extras_for
+from sql_safe_mcp.db.mysql import MySqlExtras
 
 
 class FakeResult:

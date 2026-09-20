@@ -4,7 +4,7 @@ services:
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_PID: Developer
-      MSSQL_SA_PASSWORD: ${SQL_MINI_MCP_DOCKER_SA_PASSWORD:?set by scripts/test-sqlserver.ps1}
+      MSSQL_SA_PASSWORD: ${SQL_SAFE_MCP_DOCKER_SA_PASSWORD:?set by scripts/test-sqlserver.ps1}
     ports:
       - "127.0.0.1::1433"
     healthcheck:

@@ -11,8 +11,8 @@ $sqlserverCompose = Join-Path $PSScriptRoot "..\compose.sqlserver.yml"
 $mysqlCompose = Join-Path $PSScriptRoot "..\compose.mysql.yml"
 $exitCode = 1
 $mysqlServices = @{
-    mysql   = "SQL_MINI_MCP_TEST_MYSQL_URL"
-    mariadb = "SQL_MINI_MCP_TEST_MARIADB_URL"
+    mysql   = "SQL_SAFE_MCP_TEST_MYSQL_URL"
+    mariadb = "SQL_SAFE_MCP_TEST_MARIADB_URL"
 }
 
 function Get-ContainerPassword($composeFile, $service, $variable) {
@@ -38,19 +38,19 @@ try {
         throw "Docker daemon is not ready. Start Docker Desktop and retry."
     }
 
-    $env:SQL_MINI_MCP_DOCKER_SA_PASSWORD = "SqlMiniMcpProbe!A1"
-    $env:SQL_MINI_MCP_DOCKER_ROOT_PASSWORD = "SqlMiniMcpProbe1"
+    $env:SQL_SAFE_MCP_DOCKER_SA_PASSWORD = "SqlSafeMcpProbe!A1"
+    $env:SQL_SAFE_MCP_DOCKER_ROOT_PASSWORD = "SqlSafeMcpProbe1"
 
     $saPassword = Get-ContainerPassword $sqlserverCompose "sqlserver" "MSSQL_SA_PASSWORD"
     if (-not $saPassword) {
-        $saPassword = "SqlMiniMcp!A1" + [Guid]::NewGuid().ToString("N")
+        $saPassword = "SqlSafeMcp!A1" + [Guid]::NewGuid().ToString("N")
     }
     $rootPassword = Get-ContainerPassword $mysqlCompose "mysql" "MYSQL_ROOT_PASSWORD"
     if (-not $rootPassword) {
-        $rootPassword = "SqlMiniMcp" + [Guid]::NewGuid().ToString("N")
+        $rootPassword = "SqlSafeMcp" + [Guid]::NewGuid().ToString("N")
     }
-    $env:SQL_MINI_MCP_DOCKER_SA_PASSWORD = $saPassword
-    $env:SQL_MINI_MCP_DOCKER_ROOT_PASSWORD = $rootPassword
+    $env:SQL_SAFE_MCP_DOCKER_SA_PASSWORD = $saPassword
+    $env:SQL_SAFE_MCP_DOCKER_ROOT_PASSWORD = $rootPassword
 
     docker compose -f $sqlserverCompose up -d --wait
     if ($LASTEXITCODE -ne 0) {
@@ -66,7 +66,7 @@ try {
         throw "Could not determine the SQL Server host port."
     }
     $port = ($portLine.Trim() -split ":")[-1]
-    $env:SQL_MINI_MCP_TEST_SQLSERVER_URL = (
+    $env:SQL_SAFE_MCP_TEST_SQLSERVER_URL = (
         "mssql+pyodbc://sa:{0}@127.0.0.1:{1}/master" +
         "?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=yes"
     ) -f [Uri]::EscapeDataString($saPassword), $port
@@ -82,9 +82,9 @@ try {
         )
     }
 
-    $auditDir = Join-Path ([IO.Path]::GetTempPath()) "sql-mini-mcp-audit"
+    $auditDir = Join-Path ([IO.Path]::GetTempPath()) "sql-safe-mcp-audit"
     Remove-Item $auditDir -Recurse -Force -ErrorAction SilentlyContinue
-    $env:SQL_MINI_MCP_AUDIT_DIR = $auditDir
+    $env:SQL_SAFE_MCP_AUDIT_DIR = $auditDir
 
     uv run pytest tests/integration -m integration -v @PytestArgs
     $exitCode = $LASTEXITCODE
@@ -96,10 +96,10 @@ finally {
     foreach ($name in $mysqlServices.Values) {
         Remove-Item ("Env:" + $name) -ErrorAction SilentlyContinue
     }
-    Remove-Item Env:SQL_MINI_MCP_TEST_SQLSERVER_URL -ErrorAction SilentlyContinue
-    Remove-Item Env:SQL_MINI_MCP_AUDIT_DIR -ErrorAction SilentlyContinue
-    Remove-Item Env:SQL_MINI_MCP_DOCKER_SA_PASSWORD -ErrorAction SilentlyContinue
-    Remove-Item Env:SQL_MINI_MCP_DOCKER_ROOT_PASSWORD -ErrorAction SilentlyContinue
+    Remove-Item Env:SQL_SAFE_MCP_TEST_SQLSERVER_URL -ErrorAction SilentlyContinue
+    Remove-Item Env:SQL_SAFE_MCP_AUDIT_DIR -ErrorAction SilentlyContinue
+    Remove-Item Env:SQL_SAFE_MCP_DOCKER_SA_PASSWORD -ErrorAction SilentlyContinue
+    Remove-Item Env:SQL_SAFE_MCP_DOCKER_ROOT_PASSWORD -ErrorAction SilentlyContinue
 }
 
 exit $exitCode

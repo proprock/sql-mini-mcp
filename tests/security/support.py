@@ -11,13 +11,13 @@ from typing import Any, ClassVar, cast
 
 from hypothesis import strategies as st
 
-from sql_mini_mcp.config import AppConfig, PiiConfig, PiiRule, RuntimeConfig
-from sql_mini_mcp.db.registry import EngineRegistry
-from sql_mini_mcp.security.dialect import SQLSERVER, SqlDialect
-from sql_mini_mcp.security.pipeline import validate_sql
-from sql_mini_mcp.security.tokens import TokenCodec
-from sql_mini_mcp.security.validated_query import ValidatedQuery
-from sql_mini_mcp.service import DatabaseService
+from sql_safe_mcp.config import AppConfig, PiiConfig, PiiRule, RuntimeConfig
+from sql_safe_mcp.db.registry import EngineRegistry
+from sql_safe_mcp.security.dialect import SQLSERVER, SqlDialect
+from sql_safe_mcp.security.pipeline import validate_sql
+from sql_safe_mcp.security.tokens import TokenCodec
+from sql_safe_mcp.security.validated_query import ValidatedQuery
+from sql_safe_mcp.service import DatabaseService
 
 KEY = bytes(range(32))
 OTHER_KEY = bytes(range(1, 33))

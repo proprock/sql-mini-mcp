@@ -4,7 +4,7 @@ from typing import Protocol
 
 from sqlalchemy import Connection
 
-from sql_mini_mcp.models import StoredProcedureDefinition, StoredProcedureSummary
+from sql_safe_mcp.models import StoredProcedureDefinition, StoredProcedureSummary
 
 
 class DatabaseExtras(Protocol):
@@ -25,11 +25,11 @@ class DatabaseExtras(Protocol):
 
 def extras_for(engine: str) -> DatabaseExtras:
     if engine == "sqlserver":
-        from sql_mini_mcp.db.sqlserver import SqlServerExtras
+        from sql_safe_mcp.db.sqlserver import SqlServerExtras
 
         return SqlServerExtras()
     if engine in ("mysql", "mariadb"):
-        from sql_mini_mcp.db.mysql import MySqlExtras
+        from sql_safe_mcp.db.mysql import MySqlExtras
 
         return MySqlExtras()
     raise ValueError(f"unsupported engine {engine!r}")

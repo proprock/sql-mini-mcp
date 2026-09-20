@@ -5,10 +5,10 @@ from dataclasses import dataclass
 import sqlglot
 from sqlglot import exp
 
-from sql_mini_mcp.config import RuntimeConfig
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.security.dialect import SQLSERVER, SqlDialect
-from sql_mini_mcp.security.reasons import Reason
+from sql_safe_mcp.config import RuntimeConfig
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.security.dialect import SQLSERVER, SqlDialect
+from sql_safe_mcp.security.reasons import Reason
 
 
 @dataclass(frozen=True, slots=True)

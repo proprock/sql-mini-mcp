@@ -63,7 +63,7 @@ is left to create:
 - rename `## [Unreleased]` in `CHANGELOG.md` to the version and date, leaving a fresh empty
   `## [Unreleased]` above it;
 - bump `version` in `pyproject.toml`, both version fields in `server.json`, `__version__` in
-  `src/sql_mini_mcp/__init__.py`, the server version in `src/sql_mini_mcp/mcp_server.py`, and the
+  `src/sql_safe_mcp/__init__.py`, the server version in `src/sql_safe_mcp/mcp_server.py`, and the
   assertions in `tests/unit/test_version.py`, then run `uv lock`;
 - update README and documentation status notes and pinned-version examples;
 - run the fast suite, the milestone live gate, and the prek hooks on that final state.

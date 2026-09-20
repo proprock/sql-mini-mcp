@@ -1,6 +1,6 @@
 # Architecture
 
-`sql-mini-mcp` exposes a small typed MCP API over a `DatabaseService`. The service owns object
+`sql-safe-mcp` exposes a small typed MCP API over a `DatabaseService`. The service owns object
 resolution and response normalization, `EngineRegistry` owns lazy SQLAlchemy engines, and
 `DatabaseExtras` contains only operations that SQLAlchemy Inspector cannot portably express.
 

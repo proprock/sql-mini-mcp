@@ -10,9 +10,9 @@ from unittest.mock import Mock
 import pytest
 from pydantic import SecretStr
 
-from sql_mini_mcp.config import AppConfig, RuntimeConfig, ServerConfig
-from sql_mini_mcp.db.registry import EngineRegistry
-from sql_mini_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.config import AppConfig, RuntimeConfig, ServerConfig
+from sql_safe_mcp.db.registry import EngineRegistry
+from sql_safe_mcp.errors import DomainError, ErrorCode
 
 
 def _config(cache_size: int = 1, concurrency: int = 8) -> AppConfig:
@@ -33,8 +33,8 @@ def _config(cache_size: int = 1, concurrency: int = 8) -> AppConfig:
 
 def test_registry_is_lazy_and_disposes_evicted_engine(monkeypatch: pytest.MonkeyPatch) -> None:
     created = [Mock(), Mock()]
-    monkeypatch.setattr("sql_mini_mcp.db.registry.create_engine", Mock(side_effect=created))
-    monkeypatch.setattr("sql_mini_mcp.db.registry.event.listens_for", lambda *_args: lambda fn: fn)
+    monkeypatch.setattr("sql_safe_mcp.db.registry.create_engine", Mock(side_effect=created))
+    monkeypatch.setattr("sql_safe_mcp.db.registry.event.listens_for", lambda *_args: lambda fn: fn)
     registry = EngineRegistry(_config())
 
     assert registry.cached_engine_count == 0
@@ -48,8 +48,8 @@ def test_registry_is_lazy_and_disposes_evicted_engine(monkeypatch: pytest.Monkey
 def test_registry_reuses_same_alias_and_database(monkeypatch: pytest.MonkeyPatch) -> None:
     engine = Mock()
     create = Mock(return_value=engine)
-    monkeypatch.setattr("sql_mini_mcp.db.registry.create_engine", create)
-    monkeypatch.setattr("sql_mini_mcp.db.registry.event.listens_for", lambda *_args: lambda fn: fn)
+    monkeypatch.setattr("sql_safe_mcp.db.registry.create_engine", create)
+    monkeypatch.setattr("sql_safe_mcp.db.registry.event.listens_for", lambda *_args: lambda fn: fn)
     registry = EngineRegistry(_config())
 
     assert registry.get("one", "db") is registry.get("one", "db")
@@ -58,8 +58,8 @@ def test_registry_reuses_same_alias_and_database(monkeypatch: pytest.MonkeyPatch
 
 def test_registry_dispose_closes_all_cached_engines(monkeypatch: pytest.MonkeyPatch) -> None:
     engines = [Mock(), Mock()]
-    monkeypatch.setattr("sql_mini_mcp.db.registry.create_engine", Mock(side_effect=engines))
-    monkeypatch.setattr("sql_mini_mcp.db.registry.event.listens_for", lambda *_args: lambda fn: fn)
+    monkeypatch.setattr("sql_safe_mcp.db.registry.create_engine", Mock(side_effect=engines))
+    monkeypatch.setattr("sql_safe_mcp.db.registry.event.listens_for", lambda *_args: lambda fn: fn)
     registry = EngineRegistry(_config(cache_size=2))
     registry.get("one", "db1")
     registry.get("one", "db2")
@@ -73,8 +73,8 @@ def test_registry_dispose_closes_all_cached_engines(monkeypatch: pytest.MonkeyPa
 
 def test_registry_limits_concurrent_database_operations(monkeypatch: pytest.MonkeyPatch) -> None:
     engine = Mock()
-    monkeypatch.setattr("sql_mini_mcp.db.registry.create_engine", Mock(return_value=engine))
-    monkeypatch.setattr("sql_mini_mcp.db.registry.event.listens_for", lambda *_args: lambda fn: fn)
+    monkeypatch.setattr("sql_safe_mcp.db.registry.create_engine", Mock(return_value=engine))
+    monkeypatch.setattr("sql_safe_mcp.db.registry.event.listens_for", lambda *_args: lambda fn: fn)
     registry = EngineRegistry(_config(concurrency=2))
     lock = threading.Lock()
     active = 0
@@ -101,7 +101,7 @@ def test_registry_rejects_unknown_alias_before_engine_creation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     create = Mock()
-    monkeypatch.setattr("sql_mini_mcp.db.registry.create_engine", create)
+    monkeypatch.setattr("sql_safe_mcp.db.registry.create_engine", create)
     registry = EngineRegistry(_config())
 
     with pytest.raises(DomainError) as raised:
@@ -125,8 +125,8 @@ def test_registry_configures_pool_database_and_cursor_timeout(
 
         return decorate
 
-    monkeypatch.setattr("sql_mini_mcp.db.registry.create_engine", create)
-    monkeypatch.setattr("sql_mini_mcp.db.registry.event.listens_for", listens_for)
+    monkeypatch.setattr("sql_safe_mcp.db.registry.create_engine", create)
+    monkeypatch.setattr("sql_safe_mcp.db.registry.event.listens_for", listens_for)
     registry = EngineRegistry(_config())
 
     assert registry.get("one", "tenant") is engine
@@ -160,8 +160,8 @@ def test_registry_passes_pymysql_timeouts_as_connect_args(
     monkeypatch: pytest.MonkeyPatch, engine: Literal["mysql", "mariadb"]
 ) -> None:
     create = Mock(return_value=Mock())
-    monkeypatch.setattr("sql_mini_mcp.db.registry.create_engine", create)
-    monkeypatch.setattr("sql_mini_mcp.db.registry.event.listens_for", lambda *_args: lambda fn: fn)
+    monkeypatch.setattr("sql_safe_mcp.db.registry.create_engine", create)
+    monkeypatch.setattr("sql_safe_mcp.db.registry.event.listens_for", lambda *_args: lambda fn: fn)
     config = AppConfig(
         version=1,
         servers={
@@ -194,8 +194,8 @@ def test_registry_removes_no_backslash_escapes_from_mysql_sessions(
 
         return decorate
 
-    monkeypatch.setattr("sql_mini_mcp.db.registry.create_engine", Mock(return_value=Mock()))
-    monkeypatch.setattr("sql_mini_mcp.db.registry.event.listens_for", listens_for)
+    monkeypatch.setattr("sql_safe_mcp.db.registry.create_engine", Mock(return_value=Mock()))
+    monkeypatch.setattr("sql_safe_mcp.db.registry.event.listens_for", listens_for)
     config = AppConfig(
         version=1,
         servers={

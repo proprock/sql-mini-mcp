@@ -7,13 +7,13 @@ from uuid import UUID
 
 import pytest
 
-from sql_mini_mcp.config import PiiConfig, PiiRule, RuntimeConfig
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.security.dialect import SQLSERVER
-from sql_mini_mcp.security.executor import execute_validated
-from sql_mini_mcp.security.pipeline import validate_sql
-from sql_mini_mcp.security.tokens import TokenCodec
-from sql_mini_mcp.security.validated_query import ValidatedQuery
+from sql_safe_mcp.config import PiiConfig, PiiRule, RuntimeConfig
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.security.dialect import SQLSERVER
+from sql_safe_mcp.security.executor import execute_validated
+from sql_safe_mcp.security.pipeline import validate_sql
+from sql_safe_mcp.security.tokens import TokenCodec
+from sql_safe_mcp.security.validated_query import ValidatedQuery
 
 KEY = bytes(range(32))
 CODEC = TokenCodec("srv", KEY)

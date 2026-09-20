@@ -4,13 +4,13 @@ from typing import ClassVar
 import pytest
 from sqlglot import exp
 
-from sql_mini_mcp.config import PiiConfig, PiiRule
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.security.lineage import analyze_query
-from sql_mini_mcp.security.parser import ParserLimits, parse_select
-from sql_mini_mcp.security.policy import PiiPolicy, PolicyDecision
-from sql_mini_mcp.security.schema import resolve_tables
-from sql_mini_mcp.security.tokens import TokenCodec
+from sql_safe_mcp.config import PiiConfig, PiiRule
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.security.lineage import analyze_query
+from sql_safe_mcp.security.parser import ParserLimits, parse_select
+from sql_safe_mcp.security.policy import PiiPolicy, PolicyDecision
+from sql_safe_mcp.security.schema import resolve_tables
+from sql_safe_mcp.security.tokens import TokenCodec
 
 LIMITS = ParserLimits(4096, 500, 4, 10)
 KEY = bytes(range(32))

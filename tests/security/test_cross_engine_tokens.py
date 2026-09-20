@@ -11,11 +11,11 @@ import pytest
 from support import Catalog, SpyConnection, SpyResult, _SpyRegistry
 from support_mysql import MysqlCatalog
 
-from sql_mini_mcp.config import AppConfig
-from sql_mini_mcp.db.registry import EngineRegistry
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.security.tokens import TokenCodec
-from sql_mini_mcp.service import DatabaseService
+from sql_safe_mcp.config import AppConfig
+from sql_safe_mcp.db.registry import EngineRegistry
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.security.tokens import TokenCodec
+from sql_safe_mcp.service import DatabaseService
 
 ENGINES = {"mssql": "sqlserver", "mysql": "mysql", "maria": "mariadb"}
 KEYS = {alias: bytes([index]) * 32 for index, alias in enumerate(ENGINES, start=1)}

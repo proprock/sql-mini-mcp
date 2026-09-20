@@ -8,13 +8,13 @@ from sqlalchemy import Connection, Engine
 from sqlalchemy.exc import DBAPIError, OperationalError, SQLAlchemyError
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
-from sql_mini_mcp.config import AppConfig, ServerConfig
-from sql_mini_mcp.db.extras import extras_for
-from sql_mini_mcp.db.reflection import get_table_definition as reflect_table_definition
-from sql_mini_mcp.db.reflection import list_tables as reflect_tables
-from sql_mini_mcp.db.registry import EngineRegistry
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.models import (
+from sql_safe_mcp.config import AppConfig, ServerConfig
+from sql_safe_mcp.db.extras import extras_for
+from sql_safe_mcp.db.reflection import get_table_definition as reflect_table_definition
+from sql_safe_mcp.db.reflection import list_tables as reflect_tables
+from sql_safe_mcp.db.registry import EngineRegistry
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.models import (
     ColumnSource,
     DatabaseList,
     DatabaseSummary,
@@ -29,11 +29,11 @@ from sql_mini_mcp.models import (
     TableList,
     TableSummary,
 )
-from sql_mini_mcp.security.dialect import dialect_for
-from sql_mini_mcp.security.executor import execute_validated
-from sql_mini_mcp.security.pipeline import validate_sql
-from sql_mini_mcp.security.schema import ReflectedCatalog, SchemaCache, TableCatalog
-from sql_mini_mcp.security.tokens import TokenKeyRegistry
+from sql_safe_mcp.security.dialect import dialect_for
+from sql_safe_mcp.security.executor import execute_validated
+from sql_safe_mcp.security.pipeline import validate_sql
+from sql_safe_mcp.security.schema import ReflectedCatalog, SchemaCache, TableCatalog
+from sql_safe_mcp.security.tokens import TokenKeyRegistry
 
 logger = logging.getLogger(__name__)
 CatalogFactory = Callable[[Connection, str, str], TableCatalog]

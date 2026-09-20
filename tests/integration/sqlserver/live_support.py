@@ -12,7 +12,7 @@ from pydantic import SecretStr
 from sqlalchemy import Connection, create_engine
 from sqlalchemy.engine import URL, make_url
 
-from sql_mini_mcp.config import AppConfig, PiiConfig, PiiRule, RuntimeConfig, ServerConfig
+from sql_safe_mcp.config import AppConfig, PiiConfig, PiiRule, RuntimeConfig, ServerConfig
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,12 +62,12 @@ def _pii_server(url: str, schema: str, key: bytes, key_env: str) -> ServerConfig
 
 @pytest.fixture(scope="module")
 def live_database() -> Iterator[LiveDatabase]:
-    raw_url = os.environ.get("SQL_MINI_MCP_TEST_SQLSERVER_URL")
+    raw_url = os.environ.get("SQL_SAFE_MCP_TEST_SQLSERVER_URL")
     if not raw_url:
-        pytest.skip("SQL_MINI_MCP_TEST_SQLSERVER_URL is not configured")
+        pytest.skip("SQL_SAFE_MCP_TEST_SQLSERVER_URL is not configured")
 
     suffix = uuid4().hex[:12]
-    database = "SqlMiniMcpTests"
+    database = "SqlSafeMcpTests"
     alpha_schema = f"alpha_{suffix}"
     beta_schema = f"beta_{suffix}"
     app_login = f"smm_app_{suffix}"

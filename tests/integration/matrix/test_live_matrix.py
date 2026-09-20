@@ -16,9 +16,9 @@ from mcp import Client
 from mcp_types import TextContent
 from mysql_support import LiveMySql, live_mariadb_only, live_mysql_only
 
-from sql_mini_mcp.config import AppConfig, RuntimeConfig
-from sql_mini_mcp.mcp_server import create_server
-from sql_mini_mcp.security.tokens import TokenCodec
+from sql_safe_mcp.config import AppConfig, RuntimeConfig
+from sql_safe_mcp.mcp_server import create_server
+from sql_safe_mcp.security.tokens import TokenCodec
 
 pytestmark = pytest.mark.integration
 

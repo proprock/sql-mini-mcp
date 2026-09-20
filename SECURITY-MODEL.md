@@ -1,6 +1,6 @@
 # Security model
 
-How sql-mini-mcp protects data, and the evidence behind it. To report a vulnerability, see
+How sql-safe-mcp protects data, and the evidence behind it. To report a vulnerability, see
 [SECURITY.md](SECURITY.md).
 
 ## Trust boundary

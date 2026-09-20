@@ -6,7 +6,7 @@ from typing import Any, cast
 
 from sqlalchemy import Connection
 
-from sql_mini_mcp.db.sqlserver import SqlServerExtras
+from sql_safe_mcp.db.sqlserver import SqlServerExtras
 
 
 class FakeResult:

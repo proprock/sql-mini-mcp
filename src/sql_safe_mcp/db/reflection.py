@@ -5,7 +5,7 @@ from typing import Any
 
 from sqlalchemy import Connection, inspect
 
-from sql_mini_mcp.models import (
+from sql_safe_mcp.models import (
     ColumnDefinition,
     ForeignKeyDefinition,
     IndexDefinition,

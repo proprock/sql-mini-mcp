@@ -13,13 +13,13 @@ from pydantic import SecretStr
 from sqlalchemy import create_engine
 from sqlalchemy.engine import URL, make_url
 
-from sql_mini_mcp.config import AppConfig, PiiConfig, PiiRule, RuntimeConfig, ServerConfig
+from sql_safe_mcp.config import AppConfig, PiiConfig, PiiRule, RuntimeConfig, ServerConfig
 
 Engine = Literal["mysql", "mariadb"]
 
 _ENV = {
-    "mysql": "SQL_MINI_MCP_TEST_MYSQL_URL",
-    "mariadb": "SQL_MINI_MCP_TEST_MARIADB_URL",
+    "mysql": "SQL_SAFE_MCP_TEST_MYSQL_URL",
+    "mariadb": "SQL_SAFE_MCP_TEST_MARIADB_URL",
 }
 
 

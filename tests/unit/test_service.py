@@ -9,15 +9,15 @@ from pydantic import SecretStr
 from sqlalchemy.exc import DBAPIError, OperationalError, ProgrammingError
 from sqlalchemy.exc import TimeoutError as SqlAlchemyTimeoutError
 
-from sql_mini_mcp.config import AppConfig, RuntimeConfig, ServerConfig
-from sql_mini_mcp.db.registry import EngineRegistry
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.models import (
+from sql_safe_mcp.config import AppConfig, RuntimeConfig, ServerConfig
+from sql_safe_mcp.db.registry import EngineRegistry
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.models import (
     StoredProcedureDefinition,
     StoredProcedureSummary,
     TableSummary,
 )
-from sql_mini_mcp.service import DatabaseService
+from sql_safe_mcp.service import DatabaseService
 
 
 class StubRegistry:
@@ -233,7 +233,7 @@ def test_unexpected_failure_logs_only_generic_context_and_correlation_id(
         assert raised.value.code is ErrorCode.DATABASE_ERROR
         assert raised.value.correlation_id is not None
 
-    with caplog.at_level(logging.ERROR, logger="sql_mini_mcp.service"):
+    with caplog.at_level(logging.ERROR, logger="sql_safe_mcp.service"):
         asyncio.run(scenario())
 
     captured = caplog.text

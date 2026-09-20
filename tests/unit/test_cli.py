@@ -25,7 +25,7 @@ def _run(
     *arguments: str, environment: dict[str, str] | None = None
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, "-m", "sql_mini_mcp", *arguments],
+        [sys.executable, "-m", "sql_safe_mcp", *arguments],
         capture_output=True,
         check=False,
         text=True,
@@ -46,7 +46,7 @@ def test_check_config_returns_zero_for_explicit_path(tmp_path: Path) -> None:
 def test_check_config_uses_environment_path(tmp_path: Path) -> None:
     config = _write_config(tmp_path / "from-environment.yaml")
     environment = os.environ.copy()
-    environment["SQL_MINI_MCP_CONFIG"] = str(config)
+    environment["SQL_SAFE_MCP_CONFIG"] = str(config)
 
     result = _run("--check-config", environment=environment)
 

@@ -9,8 +9,8 @@ from hypothesis import strategies as st
 from sqlglot import exp
 from support import Spec, specs
 
-from sql_mini_mcp.errors import DomainError, ErrorCode
-from sql_mini_mcp.security.parser import _ALLOWED_ARGS, validate_allowlist
+from sql_safe_mcp.errors import DomainError, ErrorCode
+from sql_safe_mcp.security.parser import _ALLOWED_ARGS, validate_allowlist
 
 SEEDS = st.integers(0, 2**32 - 1)
 ALIAS_NAMES = st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789._-", min_size=1, max_size=12)

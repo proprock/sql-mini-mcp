@@ -11,10 +11,10 @@ from mcp_types import TextContent
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 
-from sql_mini_mcp.config import AppConfig
-from sql_mini_mcp.db.reflection import get_table_definition as reflect_table_definition
-from sql_mini_mcp.db.registry import EngineRegistry
-from sql_mini_mcp.mcp_server import create_server
+from sql_safe_mcp.config import AppConfig
+from sql_safe_mcp.db.reflection import get_table_definition as reflect_table_definition
+from sql_safe_mcp.db.registry import EngineRegistry
+from sql_safe_mcp.mcp_server import create_server
 
 pytestmark = pytest.mark.integration
 
@@ -210,7 +210,7 @@ def test_live_statement_timeout_and_pool_disposal(
             super().__init__(config)
             instances.append(self)
 
-    monkeypatch.setattr("sql_mini_mcp.mcp_server.EngineRegistry", CapturingRegistry)
+    monkeypatch.setattr("sql_safe_mcp.mcp_server.EngineRegistry", CapturingRegistry)
     lock_engine = create_engine(live_database.admin_url.set(database=live_database.database))
     try:
         with lock_engine.connect() as lock_connection:

@@ -10,9 +10,9 @@ from mcp import Client
 from mcp_types import TextContent
 from mysql_support import LiveMySql, build_config, live_mysql
 
-from sql_mini_mcp.config import AppConfig
-from sql_mini_mcp.db.registry import EngineRegistry
-from sql_mini_mcp.mcp_server import create_server
+from sql_safe_mcp.config import AppConfig
+from sql_safe_mcp.db.registry import EngineRegistry
+from sql_safe_mcp.mcp_server import create_server
 
 pytestmark = pytest.mark.integration
 
@@ -184,7 +184,7 @@ def test_live_driver_read_timeout_maps_to_timeout_and_pools_are_disposed(
             super().__init__(config)
             instances.append(self)
 
-    monkeypatch.setattr("sql_mini_mcp.mcp_server.EngineRegistry", CapturingRegistry)
+    monkeypatch.setattr("sql_safe_mcp.mcp_server.EngineRegistry", CapturingRegistry)
     with socket.socket() as silent:
         silent.bind(("127.0.0.1", 0))
         silent.listen(5)

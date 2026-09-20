@@ -2,15 +2,15 @@
 
 Connection topology lives in a YAML file. Secrets live in the process environment and are pulled in
 with `${NAME}` placeholders. A complete example is in
-[sql-mini-mcp.example.yaml](../sql-mini-mcp.example.yaml).
+[sql-safe-mcp.example.yaml](../sql-safe-mcp.example.yaml).
 
 ## Locating and checking the file
 
-The server reads `--config`, else `SQL_MINI_MCP_CONFIG`, else `sql-mini-mcp.yaml` in the working
+The server reads `--config`, else `SQL_SAFE_MCP_CONFIG`, else `sql-safe-mcp.yaml` in the working
 directory. Validate the file and its environment without connecting to any database:
 
 ```bash
-sql-mini-mcp --check-config
+sql-safe-mcp --check-config
 ```
 
 Errors name the missing or invalid setting without printing a URL, key, or secret.
