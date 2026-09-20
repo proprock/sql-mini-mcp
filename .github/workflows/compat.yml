@@ -1,0 +1,31 @@
+name: Compat
+
+# One-off maintenance for the old sql-mini-mcp name. Run it by hand from the Actions tab.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deprecate-old-mcp-server:
+    runs-on: ubuntu-latest
+    env:
+      OLD_SERVER: io.github.proprock/sql-mini-mcp
+      NEW_SERVER: io.github.proprock/sql-safe-mcp
+    steps:
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+
+      - name: Authenticate to MCP Registry
+        run: ./mcp-publisher login github-oidc
+
+      - name: Deprecate old MCP server
+        run: |
+          ./mcp-publisher status \
+            --status deprecated \
+            --all-versions \
+            --message "Renamed to ${NEW_SERVER}" \
+            "${OLD_SERVER}"
