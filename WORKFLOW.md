@@ -45,5 +45,5 @@ and internal helpers do not earn an entry.
 
 GitHub Actions validates the non-Docker suite and clean package installations. Docker-backed SQL
 Server integration tests remain an opt-in local gate. Release tags create a GitHub Release with the
-checked wheel and source distribution; PyPI and MCP Registry publication require separate explicit
-approval and remain disabled in the release workflow.
+checked wheel and source distribution and publish the package to PyPI and its metadata to the MCP
+Registry. Creating or pushing a release tag requires the maintainer's explicit instruction.
