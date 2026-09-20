@@ -6,111 +6,20 @@ Each case must fail with its expected error code and must never call the databas
 from __future__ import annotations
 
 import asyncio
-import base64
 import re
-from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any, ClassVar, cast
+from typing import Any
 
 import pytest
 import yaml
+from support import FOREIGN, OTHER_KEY, OWN, SpyConnection, spy_service
 
-from sql_mini_mcp.config import AppConfig
-from sql_mini_mcp.db.registry import EngineRegistry
 from sql_mini_mcp.errors import DomainError, ErrorCode
 from sql_mini_mcp.security.tokens import PREFIX, TokenCodec
 from sql_mini_mcp.service import DatabaseService
 
 CORPUS = Path(__file__).parent / "corpus"
-KEY = bytes(range(32))
-OTHER_KEY = bytes(range(1, 33))
-OWN = TokenCodec("srv", KEY)
-FOREIGN = TokenCodec("other", OTHER_KEY)
 TEMPLATE = re.compile(r"\{\{(\w+)(?::(.*?))?\}\}")
-
-
-class SpyResult:
-    def keys(self) -> list[str]:
-        return []
-
-    def fetchmany(self, size: int) -> list[Any]:
-        return []
-
-    def close(self) -> None:
-        return None
-
-
-class SpyConnection:
-    def __init__(self) -> None:
-        self.calls: list[tuple[str, tuple[Any, ...]]] = []
-
-    def exec_driver_sql(self, statement: str, parameters: tuple[Any, ...]) -> SpyResult:
-        self.calls.append((statement, parameters))
-        return SpyResult()
-
-    def __enter__(self) -> SpyConnection:
-        return self
-
-    def __exit__(self, *exc: object) -> None:
-        return None
-
-
-class SpyEngine:
-    def __init__(self, connection: SpyConnection) -> None:
-        self._connection = connection
-
-    def connect(self) -> SpyConnection:
-        return self._connection
-
-
-class SpyRegistry:
-    def __init__(self, connection: SpyConnection) -> None:
-        self.connection = connection
-
-    async def run(self, alias: str, database: str | None, operation: Callable[[Any], Any]) -> Any:
-        return operation(SpyEngine(self.connection))
-
-
-class Catalog:
-    tables: ClassVar[dict[tuple[str, str], list[str]]] = {
-        ("dbo", "Users"): ["Id", "Email", "Phone", "Name"],
-        ("dbo", "Orders"): ["Id", "UserId", "Total"],
-        ("dbo", "Contacts"): ["Id", "Email"],
-        ("dbo", "Canary"): ["Id"],
-        ("dbo", "Items"): ["Id"],
-        ("sales", "Items"): ["Id"],
-    }
-
-    def list_tables(self) -> list[tuple[str, str]]:
-        return list(self.tables)
-
-    def columns(self, schema: str, table: str) -> Sequence[str]:
-        return self.tables[(schema, table)]
-
-
-def _server(key: bytes, key_env: str) -> dict[str, object]:
-    return {
-        "engine": "sqlserver",
-        "access_level": "pii_safe",
-        "connection_url": "mssql+pyodbc://u:p@sql/master?driver=x",
-        "pii_key_env": key_env,
-        "pii_key": base64.b64encode(key).decode(),
-        "pii": {
-            "rules": [
-                {"database": "*", "schema": "dbo", "table": "Users", "columns": ["Email", "Phone"]},
-                {"database": "app", "schema": "dbo", "table": "Orders", "columns": ["Total"]},
-            ]
-        },
-    }
-
-
-def _config() -> AppConfig:
-    return AppConfig.model_validate(
-        {
-            "version": 1,
-            "servers": {"srv": _server(KEY, "K1"), "other": _server(OTHER_KEY, "K2")},
-        }
-    )
 
 
 def _own_token() -> str:
@@ -182,12 +91,7 @@ CASES = load_cases()
 @pytest.fixture(scope="module")
 def harness() -> tuple[DatabaseService, SpyConnection]:
     connection = SpyConnection()
-    service = DatabaseService(
-        _config(),
-        cast(EngineRegistry, SpyRegistry(connection)),
-        catalog_factory=lambda *_: Catalog(),
-    )
-    return service, connection
+    return spy_service(connection), connection
 
 
 def test_corpus_is_well_formed_and_large_enough() -> None:
