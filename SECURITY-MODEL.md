@@ -48,12 +48,13 @@ executed except through the validated AST, and rejection reasons come from a fix
 
 ### Equivalent mutants
 
-The last complete mutation run (Linux, mutmut 3.8, 1410 mutants) killed 1369 mutants, with no
-timeouts and no unclassified survivors. The 41 survivors are equivalent to the original code:
+The last complete mutation run (Linux, mutmut 3.8, 1454 mutants, after the mysql dialect work)
+killed 1413 mutants, with no timeouts and no unclassified survivors. The 41 survivors are
+equivalent to the original code:
 
 | Location | Mutation | Why it cannot change behavior |
 |---|---|---|
-| `validated_query._to_qmark` (2) | `replace(marker, "?", 1)` with the count omitted or 2 | Markers are unique random strings and the guard `len(found) == len(markers) and set(found) == set(markers)` proves each occurs exactly once. |
+| `validated_query._to_positional` (2) | `replace(marker, dialect.bind_marker, 1)` with the count omitted or 2 | Markers are unique random strings and the guard `len(found) == len(markers) and set(found) == set(markers)` proves each occurs exactly once. |
 | `executor._encode` (1) | `.decode("ascii")` as `"ASCII"` | Python codec names are case-insensitive aliases. |
 | `tokens._reject_constant` (4) | message text | The `ValueError` is raised inside `json.loads` and swallowed by `TokenCodec.decrypt`, which always raises the fixed `INVALID_PII_TOKEN` error; the text is never observed. |
 | `tokens._encode_float` (6) | `or` as `and`, `float("INF")`, `float("-INF")`, three message texts | `json.dumps(..., allow_nan=False)` rejects NaN and infinities right after, and `encrypt` maps that `ValueError` to the same unsupported-value error. `float("INF") == float("inf")`. |
