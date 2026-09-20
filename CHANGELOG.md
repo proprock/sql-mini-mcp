@@ -6,3 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 categories `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, and `Security`.
 
 ## [Unreleased]
+
+## [0.9.0] - 2026-09-20
+
+### Added
+
+- Read-only SQL Server metadata tools for configured server aliases, databases, tables, and
+  stored procedures.

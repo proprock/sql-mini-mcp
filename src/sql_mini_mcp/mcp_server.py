@@ -49,7 +49,7 @@ def create_server(config: AppConfig) -> MCPServer[AppContext]:
     server: MCPServer[AppContext] = MCPServer(
         "sql-mini-mcp",
         description="Minimal, read-only, PII-safe SQL database navigation.",
-        version="0.1.0",
+        version="0.9.0",
         lifespan=lifespan,
     )
 
