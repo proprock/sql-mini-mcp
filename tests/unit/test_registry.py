@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
+from collections.abc import Callable
 from unittest.mock import Mock
 
 import pytest
@@ -10,6 +11,7 @@ from pydantic import SecretStr
 
 from sql_mini_mcp.config import AppConfig, RuntimeConfig, ServerConfig
 from sql_mini_mcp.db.registry import EngineRegistry
+from sql_mini_mcp.errors import DomainError, ErrorCode
 
 
 def _config(cache_size: int = 1, concurrency: int = 8) -> AppConfig:
@@ -92,3 +94,54 @@ def test_registry_limits_concurrent_database_operations(monkeypatch: pytest.Monk
     asyncio.run(scenario())
 
     assert peak == 2
+
+
+def test_registry_rejects_unknown_alias_before_engine_creation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create = Mock()
+    monkeypatch.setattr("sql_mini_mcp.db.registry.create_engine", create)
+    registry = EngineRegistry(_config())
+
+    with pytest.raises(DomainError) as raised:
+        registry.get("missing", "db")
+
+    assert raised.value.code is ErrorCode.UNKNOWN_SERVER
+    create.assert_not_called()
+
+
+def test_registry_configures_pool_database_and_cursor_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    engine = Mock()
+    create = Mock(return_value=engine)
+    callbacks: dict[str, Callable[..., None]] = {}
+
+    def listens_for(_engine: object, event_name: str) -> Callable[..., object]:
+        def decorate(callback: Callable[..., None]) -> Callable[..., None]:
+            callbacks[event_name] = callback
+            return callback
+
+        return decorate
+
+    monkeypatch.setattr("sql_mini_mcp.db.registry.create_engine", create)
+    monkeypatch.setattr("sql_mini_mcp.db.registry.event.listens_for", listens_for)
+    registry = EngineRegistry(_config())
+
+    assert registry.get("one", "tenant") is engine
+
+    url = create.call_args.args[0]
+    assert url.database == "tenant"
+    assert create.call_args.kwargs == {
+        "pool_size": 2,
+        "max_overflow": 2,
+        "pool_timeout": 10,
+        "pool_pre_ping": True,
+        "pool_use_lifo": True,
+    }
+    callback = callbacks["before_cursor_execute"]
+    cursor = Mock(timeout=0)
+    callback(None, cursor, "SELECT secret", {"password": "hidden"}, None, False)
+    assert cursor.timeout == 30
+
+    callback(None, object(), "SELECT 1", {}, None, False)
