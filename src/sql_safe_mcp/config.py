@@ -43,6 +43,12 @@ class RuntimeConfig(BaseModel):
         return self
 
 
+class LoggingConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+
+
 class PiiRule(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -113,6 +119,7 @@ class AppConfig(BaseModel):
 
     version: Literal[1]
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
     servers: dict[str, ServerConfig] = Field(min_length=1)
 
     @model_validator(mode="after")
