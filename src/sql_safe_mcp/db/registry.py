@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import time
 from collections import OrderedDict
 from collections.abc import Callable
 from threading import RLock
@@ -9,9 +11,11 @@ import anyio
 from sqlalchemy import Engine, create_engine, event
 
 from sql_safe_mcp.config import AppConfig
+from sql_safe_mcp.diagnostics import describe_error, secrets_for
 from sql_safe_mcp.errors import DomainError, ErrorCode
 
 T = TypeVar("T")
+logger = logging.getLogger(__name__)
 
 
 class EngineRegistry:
@@ -47,6 +51,30 @@ class EngineRegistry:
             pool_use_lifo=True,
             **options,
         )
+
+        secrets = secrets_for(server.connection_url.get_secret_value())
+
+        @event.listens_for(engine, "do_connect")
+        def connect_and_log(dialect: Any, _record: Any, cargs: Any, cparams: Any) -> Any:
+            started = time.perf_counter()
+            try:
+                connection = dialect.connect(*cargs, **cparams)
+            except Exception as exc:
+                logger.warning(
+                    "connect failed server=%s database=%s elapsed_ms=%d error=%s",
+                    alias,
+                    database or "-",
+                    (time.perf_counter() - started) * 1000,
+                    describe_error(exc, secrets),
+                )
+                raise
+            logger.info(
+                "connect ok server=%s database=%s elapsed_ms=%d",
+                alias,
+                database or "-",
+                (time.perf_counter() - started) * 1000,
+            )
+            return connection
 
         @event.listens_for(engine, "connect")
         def set_connection_timeout(dbapi_connection: Any, _record: Any) -> None:
@@ -95,8 +123,17 @@ class EngineRegistry:
                 return engine
             engine = self._create_engine(alias, database)
             self._engines[key] = engine
+            logger.debug(
+                "engine created server=%s engine=%s database=%s",
+                alias,
+                self._config.servers[alias].engine,
+                database or "-",
+            )
             if len(self._engines) > self._config.runtime.engine_cache_size:
-                _, evicted = self._engines.popitem(last=False)
+                evicted_key, evicted = self._engines.popitem(last=False)
+                logger.debug(
+                    "engine evicted server=%s database=%s", evicted_key[0], evicted_key[1] or "-"
+                )
         if evicted is not None:
             evicted.dispose()
         return engine
