@@ -105,7 +105,7 @@ class DatabaseService:
         error: DomainError,
         cause: BaseException,
     ) -> DomainError:
-        secrets = secrets_for(self.config.servers[alias].connection_url.get_secret_value())
+        secrets = secrets_for(self.config.servers[alias].connection_url.get_secret_value(), alias)
         logger.warning(
             "operation failed server=%s database=%s operation=%s code=%s reference=%s error=%s",
             alias,

@@ -26,7 +26,7 @@ def _config(cache_size: int = 1, concurrency: int = 8) -> AppConfig:
         servers={
             "one": ServerConfig(
                 engine="sqlserver",
-                connection_url=SecretStr("mssql+pyodbc://u:p@one/master?driver=x"),
+                connection_url=SecretStr("mssql+pyodbc://u:p@sql-host/master?driver=x"),
             )
         },
     )
@@ -266,7 +266,7 @@ def test_failed_connect_is_logged_without_secrets_and_reraised(
 ) -> None:
     _, listeners = _registry_with_listeners(monkeypatch)
     dialect = Mock()
-    failure = _ConnectFailure("28000", "[28000] Login failed for user 'u' (pwd p) on one")
+    failure = _ConnectFailure("28000", "[28000] Login failed for user 'u' (pwd p) on sql-host")
     dialect.connect.side_effect = failure
     caplog.set_level(logging.INFO, logger="sql_safe_mcp")
 
@@ -276,8 +276,9 @@ def test_failed_connect_is_logged_without_secrets_and_reraised(
     assert "connect failed server=one database=db1 elapsed_ms=" in caplog.text
     assert "sqlstate=28000" in caplog.text
     assert "Login failed for user" in caplog.text
-    for leaked in ("'u'", "pwd p", "on one"):
+    for leaked in ("'u'", "pwd p", "sql-host"):
         assert leaked not in caplog.text
+    assert "on one" in caplog.text
     assert "mssql+pyodbc" not in caplog.text
 
 

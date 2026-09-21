@@ -21,15 +21,21 @@ def _wrapped(orig: Exception) -> OperationalError:
     return OperationalError("SELECT 1", None, orig)
 
 
-def test_secrets_for_returns_password_user_and_host_in_raw_and_quoted_form() -> None:
-    secrets = secrets_for("mssql+pyodbc://a%40b:p%3A%2Fx@sql01/master?driver=x")
+def test_secrets_for_maps_credentials_to_stars_and_host_to_the_alias() -> None:
+    redactions = dict(secrets_for("mssql+pyodbc://a%40b:p%3A%2Fx@sql01/master?driver=x", "legacy"))
 
-    assert {"a@b", "a%40b", "p:/x", "p%3A%2Fx", "sql01"} <= set(secrets)
+    assert redactions == {
+        "a@b": "***",
+        "a%40b": "***",
+        "p:/x": "***",
+        "p%3A%2Fx": "***",
+        "sql01": "legacy",
+    }
 
 
 def test_secrets_for_ignores_missing_parts_and_unparsable_urls() -> None:
-    assert secrets_for("mysql+pymysql://db.internal/shop") == ("db.internal",)
-    assert secrets_for("not a url") == ()
+    assert secrets_for("mysql+pymysql://db.internal/shop", "shop") == (("db.internal", "shop"),)
+    assert secrets_for("not a url", "shop") == ()
 
 
 def test_describe_error_reports_class_sqlstate_and_message() -> None:
@@ -51,7 +57,7 @@ def test_describe_error_falls_back_to_the_exception_text() -> None:
 
 
 def test_describe_error_redacts_secrets() -> None:
-    secrets = secrets_for("mssql+pyodbc://svc_app:S3cr3t!@sql01.corp/master?driver=x")
+    secrets = secrets_for("mssql+pyodbc://svc_app:S3cr3t!@sql01.corp/master?driver=x", "legacy")
     error = _wrapped(
         _OdbcError("28000", "Login failed for user 'svc_app' on SQL01.corp, pwd S3cr3t!")
     )
@@ -60,13 +66,13 @@ def test_describe_error_redacts_secrets() -> None:
 
     for secret in ("svc_app", "S3cr3t!", "sql01.corp"):
         assert secret.casefold() not in line.casefold()
-    assert "Login failed for user" in line
+    assert "Login failed for user '***' on legacy, pwd ***" in line
 
 
 def test_describe_error_redacts_short_usernames_only_as_whole_words() -> None:
     error = _wrapped(_OdbcError("28000", "Login failed for user 'sa'. Password rejected."))
 
-    line = describe_error(error, ("sa",))
+    line = describe_error(error, (("sa", "***"),))
 
     assert "'sa'" not in line
     assert "Password rejected" in line

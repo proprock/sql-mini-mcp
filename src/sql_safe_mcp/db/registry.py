@@ -52,7 +52,7 @@ class EngineRegistry:
             **options,
         )
 
-        secrets = secrets_for(server.connection_url.get_secret_value())
+        secrets = secrets_for(server.connection_url.get_secret_value(), alias)
 
         @event.listens_for(engine, "do_connect")
         def connect_and_log(dialect: Any, _record: Any, cargs: Any, cparams: Any) -> Any:

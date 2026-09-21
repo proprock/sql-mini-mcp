@@ -17,19 +17,22 @@ def configure_logging(level: str) -> None:
     logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
 
 
-def secrets_for(url: str) -> tuple[str, ...]:
-    """Password, user name, and host of a connection URL, raw and URL-quoted."""
+def secrets_for(url: str, alias: str) -> tuple[tuple[str, str], ...]:
+    """Redactions for a connection URL: credentials become ``***``, the host the server alias."""
     try:
         parsed = make_url(url)
     except Exception:
         return ()
-    values = (parsed.password, parsed.username, parsed.host)
-    found: dict[str, None] = {}
-    for value in values:
+    found: dict[str, str] = {}
+    for value, replacement in (
+        (parsed.password, "***"),
+        (parsed.username, "***"),
+        (parsed.host, alias),
+    ):
         if value:
-            found[value] = None
-            found[quote(value, safe="")] = None
-    return tuple(found)
+            found[value] = replacement
+            found[quote(value, safe="")] = replacement
+    return tuple(found.items())
 
 
 def _driver_parts(exc: BaseException) -> tuple[str, str, str]:
@@ -50,11 +53,17 @@ def _secret_pattern(secret: str) -> str:
     return f"{start}{re.escape(secret)}{end}"
 
 
-def describe_error(exc: BaseException, secrets: Iterable[str]) -> str:
+def describe_error(exc: BaseException, redactions: Iterable[tuple[str, str]]) -> str:
     """One log-safe line for a driver error: class, SQLSTATE or code, redacted message."""
     name, code, message = _driver_parts(exc)
-    for secret in sorted({value for value in secrets if value}, key=len, reverse=True):
-        message = re.sub(_secret_pattern(secret), "***", message, flags=re.IGNORECASE)
+    for secret, replacement in sorted(set(redactions), key=lambda pair: len(pair[0]), reverse=True):
+        if secret:
+            message = re.sub(
+                _secret_pattern(secret),
+                lambda _, text=replacement: text,
+                message,
+                flags=re.IGNORECASE,
+            )
     message = _CONTROL_CHARACTERS.sub(" ", message).strip()
     if len(message) > _MAX_MESSAGE_CHARS:
         message = message[:_MAX_MESSAGE_CHARS] + "..."
