@@ -254,3 +254,108 @@ def test_ambiguous_table_candidates_omit_null_schema() -> None:
     assert raised.value.code is ErrorCode.AMBIGUOUS_OBJECT
     assert "None" not in str(raised.value)
     assert "Users" in str(raised.value)
+
+
+class _OdbcFailure(Exception):
+    """Shaped like pyodbc.Error: args are (sqlstate, message)."""
+
+
+def _login_timeout() -> OperationalError:
+    return OperationalError(
+        "SELECT secret",
+        {"password": "hidden"},
+        _OdbcFailure("HYT00", "[HYT00] Login timeout expired for u at alpha (pwd p)"),
+    )
+
+
+def test_timeout_is_logged_with_driver_detail_and_matching_reference(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    service = _service(_login_timeout())
+
+    async def scenario() -> DomainError:
+        with pytest.raises(DomainError) as raised:
+            await service.list_databases("Alpha")
+        return raised.value
+
+    with caplog.at_level(logging.INFO, logger="sql_safe_mcp.service"):
+        error = asyncio.run(scenario())
+
+    assert error.code is ErrorCode.TIMEOUT
+    assert error.correlation_id is not None
+    assert f"Reference: {error.correlation_id}" in str(error)
+    line = caplog.text
+    assert "operation failed server=Alpha database=- operation=list_databases" in line
+    assert "code=TIMEOUT" in line
+    assert f"reference={error.correlation_id}" in line
+    assert "sqlstate=HYT00" in line
+    assert "Login timeout expired" in line
+    for leaked in ("SELECT secret", "hidden", " u ", "alpha", "pwd p"):
+        assert leaked not in line
+
+
+def test_connection_failure_gets_a_reference_and_access_denied_does_not(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    connection = OperationalError("SELECT 1", None, Exception("08001 connection failed"))
+    denied = ProgrammingError("SELECT 1", None, Exception("permission denied"))
+    service = _service(connection, denied)
+
+    async def scenario() -> list[DomainError]:
+        errors = []
+        for _ in range(2):
+            with pytest.raises(DomainError) as raised:
+                await service.list_databases("Alpha")
+            errors.append(raised.value)
+        return errors
+
+    with caplog.at_level(logging.INFO, logger="sql_safe_mcp.service"):
+        failed, refused = asyncio.run(scenario())
+
+    assert failed.code is ErrorCode.CONNECTION_FAILED and failed.correlation_id
+    assert refused.code is ErrorCode.ACCESS_DENIED and refused.correlation_id is None
+    assert "code=CONNECTION_FAILED" in caplog.text
+    assert "code=ACCESS_DENIED" in caplog.text
+
+
+def test_pool_timeout_is_logged(caplog: pytest.LogCaptureFixture) -> None:
+    service = _service(SqlAlchemyTimeoutError("QueuePool limit of size 2 overflow 2 reached"))
+
+    async def scenario() -> None:
+        with pytest.raises(DomainError) as raised:
+            await service.list_databases("Alpha")
+        assert raised.value.code is ErrorCode.TIMEOUT
+
+    with caplog.at_level(logging.INFO, logger="sql_safe_mcp.service"):
+        asyncio.run(scenario())
+
+    assert "code=TIMEOUT" in caplog.text
+    assert "QueuePool limit" in caplog.text
+
+
+def test_successful_operation_is_logged_with_elapsed(caplog: pytest.LogCaptureFixture) -> None:
+    service = _service(["master"])
+
+    with caplog.at_level(logging.INFO, logger="sql_safe_mcp.service"):
+        asyncio.run(service.list_databases("Alpha"))
+
+    assert (
+        "operation ok server=Alpha database=- operation=list_databases elapsed_ms=" in caplog.text
+    )
+
+
+def test_unexpected_failure_log_names_only_the_exception_class(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    service = _service(RuntimeError("SELECT secret password=hidden"))
+
+    async def scenario() -> None:
+        with pytest.raises(DomainError):
+            await service.list_databases("Alpha")
+
+    with caplog.at_level(logging.INFO, logger="sql_safe_mcp.service"):
+        asyncio.run(scenario())
+
+    assert "operation=list_databases" in caplog.text
+    assert "RuntimeError" in caplog.text
+    assert "hidden" not in caplog.text

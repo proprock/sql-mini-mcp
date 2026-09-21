@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Callable
 from typing import TypeVar
+from uuid import uuid4
 
 from sqlalchemy import Connection, Engine
 from sqlalchemy.exc import DBAPIError, OperationalError, SQLAlchemyError
@@ -13,6 +15,7 @@ from sql_safe_mcp.db.extras import extras_for
 from sql_safe_mcp.db.reflection import get_table_definition as reflect_table_definition
 from sql_safe_mcp.db.reflection import list_tables as reflect_tables
 from sql_safe_mcp.db.registry import EngineRegistry
+from sql_safe_mcp.diagnostics import describe_error, secrets_for
 from sql_safe_mcp.errors import DomainError, ErrorCode
 from sql_safe_mcp.models import (
     ColumnSource,
@@ -40,6 +43,24 @@ CatalogFactory = Callable[[Connection, str, str], TableCatalog]
 _SCHEMA_CACHE_ENTRIES = 1024
 _SCHEMA_CACHE_TTL_SECONDS = 300.0
 T = TypeVar("T")
+
+
+def _timeout_error() -> DomainError:
+    return DomainError(
+        ErrorCode.TIMEOUT,
+        "The database operation timed out.",
+        retryable=True,
+        correlation_id=uuid4().hex,
+    )
+
+
+def _connection_error() -> DomainError:
+    return DomainError(
+        ErrorCode.CONNECTION_FAILED,
+        "Could not connect to the configured database server.",
+        retryable=True,
+        correlation_id=uuid4().hex,
+    )
 
 
 def _contains(value: str, needle: str | None) -> bool:
@@ -76,55 +97,95 @@ class DatabaseService:
                 "Call list_servers to discover configured aliases.",
             ) from exc
 
-    async def _run(self, alias: str, database: str | None, operation: Callable[[Engine], T]) -> T:
+    def _classified(
+        self,
+        alias: str,
+        database: str | None,
+        operation: str,
+        error: DomainError,
+        cause: BaseException,
+    ) -> DomainError:
+        secrets = secrets_for(self.config.servers[alias].connection_url.get_secret_value())
+        logger.warning(
+            "operation failed server=%s database=%s operation=%s code=%s reference=%s error=%s",
+            alias,
+            database or "-",
+            operation,
+            error.code,
+            error.correlation_id or "-",
+            describe_error(cause, secrets),
+        )
+        return error
+
+    def _unexpected(
+        self, message: str, alias: str, database: str | None, operation: str, cause: BaseException
+    ) -> DomainError:
+        error = DomainError.unexpected()
+        logger.error(
+            "%s; server=%s database=%s operation=%s error_class=%s reference=%s",
+            message,
+            alias,
+            database or "-",
+            operation,
+            type(cause).__name__,
+            error.correlation_id,
+        )
+        return error
+
+    async def _run(
+        self,
+        alias: str,
+        database: str | None,
+        operation_name: str,
+        operation: Callable[[Engine], T],
+    ) -> T:
         self._server(alias)
+        started = time.perf_counter()
         try:
-            return await self.registry.run(alias, database, operation)
+            result = await self.registry.run(alias, database, operation)
         except DomainError:
             raise
         except SQLAlchemyTimeoutError as exc:
-            raise DomainError(
-                ErrorCode.TIMEOUT,
-                "The database operation timed out.",
-                retryable=True,
-            ) from exc
+            raise self._classified(alias, database, operation_name, _timeout_error(), exc) from exc
         except DBAPIError as exc:
             message = str(exc.orig).casefold()
             if any(value in message for value in ("timeout", "timed out", "hyt00", "hyt01")):
-                raise DomainError(
-                    ErrorCode.TIMEOUT, "The database operation timed out.", retryable=True
+                raise self._classified(
+                    alias, database, operation_name, _timeout_error(), exc
                 ) from exc
             if any(value in message for value in ("permission", "denied", "not authorized")):
-                raise DomainError(
-                    ErrorCode.ACCESS_DENIED, "The database denied this operation."
+                raise self._classified(
+                    alias,
+                    database,
+                    operation_name,
+                    DomainError(ErrorCode.ACCESS_DENIED, "The database denied this operation."),
+                    exc,
                 ) from exc
             if any(
                 value in message for value in ("cannot open database", "(4060)", "08001", "08004")
-            ):
-                raise DomainError(
-                    ErrorCode.CONNECTION_FAILED,
-                    "Could not connect to the configured database server.",
-                    retryable=True,
+            ) or isinstance(exc, OperationalError):
+                raise self._classified(
+                    alias, database, operation_name, _connection_error(), exc
                 ) from exc
-            if isinstance(exc, OperationalError):
-                raise DomainError(
-                    ErrorCode.CONNECTION_FAILED,
-                    "Could not connect to the configured database server.",
-                    retryable=True,
-                ) from exc
-            error = DomainError.unexpected()
-            logger.error("Database operation failed; reference=%s", error.correlation_id)
-            raise error from exc
+            raise self._unexpected(
+                "Database operation failed", alias, database, operation_name, exc
+            ) from exc
         except SQLAlchemyError as exc:
-            error = DomainError.unexpected()
-            logger.error("SQLAlchemy operation failed; reference=%s", error.correlation_id)
-            raise error from exc
+            raise self._unexpected(
+                "SQLAlchemy operation failed", alias, database, operation_name, exc
+            ) from exc
         except Exception as exc:
-            error = DomainError.unexpected()
-            logger.error(
-                "Unexpected database operation failure; reference=%s", error.correlation_id
-            )
-            raise error from exc
+            raise self._unexpected(
+                "Unexpected database operation failure", alias, database, operation_name, exc
+            ) from exc
+        logger.info(
+            "operation ok server=%s database=%s operation=%s elapsed_ms=%d",
+            alias,
+            database or "-",
+            operation_name,
+            (time.perf_counter() - started) * 1000,
+        )
+        return result
 
     def list_servers(self) -> ServerList:
         return ServerList(
@@ -143,7 +204,7 @@ class DatabaseService:
             with engine.connect() as connection:
                 return extras_for(configured.engine).list_databases(connection)
 
-        names = await self._run(server, None, operation)
+        names = await self._run(server, None, "list_databases", operation)
         return DatabaseList(
             databases=[
                 DatabaseSummary(name=name)
@@ -165,7 +226,7 @@ class DatabaseService:
             with engine.connect() as connection:
                 return reflect_tables(connection)
 
-        tables = await self._run(server, database, operation)
+        tables = await self._run(server, database, "list_tables", operation)
         selected = [
             table
             for table in tables
@@ -204,7 +265,7 @@ class DatabaseService:
                 selected = self._resolve_table(reflect_tables(connection), table, schema)
                 return reflect_table_definition(connection, selected.schema_, selected.name)
 
-        return await self._run(server, database, operation)
+        return await self._run(server, database, "get_table_definition", operation)
 
     async def list_stored_procedures(
         self,
@@ -219,7 +280,7 @@ class DatabaseService:
             with engine.connect() as connection:
                 return extras_for(configured.engine).list_stored_procedures(connection, database)
 
-        procedures = await self._run(server, database, operation)
+        procedures = await self._run(server, database, "list_stored_procedures", operation)
         selected = [
             item
             for item in procedures
@@ -258,7 +319,7 @@ class DatabaseService:
                     connection, database, selected.schema_, selected.name
                 )
 
-        result = await self._run(server, database, operation)
+        result = await self._run(server, database, "get_stored_procedure", operation)
         if result is None:
             raise DomainError(ErrorCode.NOT_FOUND, f"Stored procedure {name!r} was not found.")
         if (
@@ -322,4 +383,4 @@ class DatabaseService:
                 truncated=executed.truncated,
             )
 
-        return await self._run(server, database, operation)
+        return await self._run(server, database, "execute_sql", operation)
