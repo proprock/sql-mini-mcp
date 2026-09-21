@@ -52,6 +52,11 @@ databases, tables, columns, keys, indexes, stored procedures - and, on servers y
   case-insensitive name filters, and stored procedure lists that do not expand definitions.
 - **Errors an agent can act on** - an ambiguous name lists the candidate schemas. Errors never
   contain connection details, credentials, keys, tokens, or rows.
+- **Tested against attacks, not just examples** - the SQL and PII boundary is checked with an
+  adversarial corpus of hostile statements, property-based tests (token isolation, tamper
+  resistance), a live attack run against a really writable login with before/after snapshots, and
+  mutation testing. Results are in
+  [Verification of the SQL boundary](SECURITY-MODEL.md#verification-of-the-sql-boundary).
 - **On PyPI** - `uvx sql-safe-mcp`, no repo clone required.
 
 | Tool | Access | Purpose |
@@ -113,6 +118,32 @@ servers:
     access_level: metadata
     connection_url: "${REPORTING_SQL_URL}"
 ```
+
+`connection_url` is a SQLAlchemy URL whose dialect must match `engine`. It is a secret, so keep the
+credentials in environment variables and reference them with `${NAME}`:
+
+```yaml
+servers:
+  # The whole URL comes from one variable (it may hold any valid URL).
+  reporting:
+    engine: sqlserver
+    connection_url: "${REPORTING_SQL_URL}"
+
+  # SQL Server (mssql+pyodbc), URL assembled from parts. Embedded placeholders are
+  # URL-encoded, so a password containing @ or / is safe.
+  billing:
+    engine: sqlserver
+    connection_url: >-
+      mssql+pyodbc://${BILLING_USER}:${BILLING_PASSWORD}@${BILLING_HOST}/master
+      ?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes
+
+  # MySQL or MariaDB (mysql+pymysql). Use engine: mariadb for MariaDB.
+  shop:
+    engine: mysql
+    connection_url: "mysql+pymysql://${SHOP_USER}:${SHOP_PASSWORD}@db.internal/shop"
+```
+
+A missing variable, or an `engine` that does not match the URL dialect, stops the server at startup.
 
 Point the server at the file with `SQL_SAFE_MCP_CONFIG` (or `--config`), and check it without
 connecting to any database:

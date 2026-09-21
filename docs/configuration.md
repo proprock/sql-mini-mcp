@@ -15,6 +15,16 @@ sql-safe-mcp --check-config
 
 Errors name the missing or invalid setting without printing a URL, key, or secret.
 
+## Top-level keys
+
+| Key | Meaning |
+|---|---|
+| `version` | Required. Must be `1`. |
+| `servers` | Required. A non-empty map of alias to server settings. |
+| `runtime` | Optional limits; see [Runtime limits](#runtime-limits). |
+
+Unknown keys anywhere in the file are a startup error.
+
 ## Servers
 
 ```yaml
@@ -31,8 +41,9 @@ servers:
 | alias (the map key) | Letters, digits, `.`, `_`, `-`; starts with a letter or digit. This is what the agent passes as `server`. |
 | `engine` | `sqlserver` (`mssql+pyodbc`), `mysql` or `mariadb` (both `mysql+pymysql`). MySQL and MariaDB have no schema level: `schema` is always `null`, and a `pii` rule for them must not set `schema` (the table is matched by `database` and `table`). |
 | `access_level` | `metadata` (default) or `pii_safe`. |
-| `connection_url` | A SQLAlchemy `mssql+pyodbc://` (SQL Server) or `mysql+pymysql://` (MySQL, MariaDB) URL. Treated as a secret. |
-| `pii_key_env`, `pii` | Only for `pii_safe`; see below. |
+| `connection_url` | Required. A SQLAlchemy `mssql+pyodbc://` (SQL Server) or `mysql+pymysql://` (MySQL, MariaDB) URL whose dialect must match `engine`. Treated as a secret. |
+| `pii_key_env` | Required for `pii_safe`, forbidden otherwise. The name of the environment variable holding the alias key; matches `^[A-Z_][A-Z0-9_]*$`. |
+| `pii` | Required for `pii_safe`, forbidden otherwise. Holds `rules`; see [PII rules](#pii-rules). |
 
 ### Placeholders
 
@@ -61,6 +72,88 @@ they cannot cross aliases even if keys are duplicated outside normal config load
 or renaming an alias will invalidate existing tokens. A `metadata` server must not set
 `pii_key_env` or `pii`.
 
+### PII rules
+
+`pii.rules` is a non-empty list. Each rule protects columns of one table:
+
+| Key | Meaning |
+|---|---|
+| `database` | Required. An exact database name, or `"*"` for every database. `"*"` is the only wildcard allowed anywhere in a rule. |
+| `schema` | Optional, SQL Server only. Omitted means the table is protected in every schema. Must not be set for `mysql` or `mariadb`. |
+| `table` | Required. An exact table name. |
+| `columns` | Required. A non-empty list of column names, unique ignoring case. |
+
+Names match case-insensitively. Only listed columns are protected, so list every column that holds
+personal data. On MySQL and MariaDB the database is the catalog: `database` is the MySQL database
+name and the rule has no `schema`.
+
+SQL Server, every database, one table:
+
+```yaml
+pii:
+  rules:
+    - database: "*"
+      schema: dbo
+      table: Users
+      columns: [Email, FirstName, LastName]
+```
+
+SQL Server, several tables, one of them limited to a single database:
+
+```yaml
+pii:
+  rules:
+    - database: "*"
+      schema: dbo
+      table: Users
+      columns: [Email, Phone]
+    - database: Billing
+      schema: dbo
+      table: Cards
+      columns: [HolderName, LastFour]
+    - database: Billing
+      schema: audit
+      table: Logins
+      columns: [IpAddress]
+```
+
+SQL Server, `schema` omitted, so `Customers` is protected in every schema:
+
+```yaml
+pii:
+  rules:
+    - database: Crm
+      table: Customers
+      columns: [Email, BirthDate]
+```
+
+MySQL or MariaDB (no `schema`):
+
+```yaml
+pii:
+  rules:
+    - database: shop
+      table: customers
+      columns: [email, full_name, address]
+    - database: "*"
+      table: sessions
+      columns: [ip_address]
+```
+
+These are startup errors:
+
+```yaml
+pii:
+  rules:
+    - database: "*"
+      table: "Users*"          # wildcards only in database
+      columns: [Email]
+    - database: shop
+      schema: dbo              # invalid for mysql and mariadb
+      table: customers
+      columns: [email, EMAIL]  # duplicate column
+```
+
 ## Runtime limits
 
 Optional, under `runtime:`. A value outside its range is a startup error.
@@ -76,7 +169,10 @@ Optional, under `runtime:`. A value outside its range is a startup error.
 | `max_definition_chars` | 262144 | 1024-10000000 |
 | `default_max_rows` | 200 | 1-100000, at most `hard_max_rows` |
 | `hard_max_rows` | 1000 | 1-100000 |
+| `max_sql_chars` | 65536 | 256-1000000 |
+| `max_ast_nodes` | 2000 | 10-100000 |
+| `max_joins` | 8 | 0-100 |
+| `max_in_list_items` | 500 | 1-100000 |
 
-`max_sql_chars`, `max_ast_nodes`, `max_joins`, and `max_in_list_items` bound the SQL accepted by
-`execute_sql`; a query at the limit is accepted and one above it is rejected. A PII rule without
-`schema` protects the table in every schema.
+The last four bound the SQL accepted by `execute_sql`; a query at the limit is accepted and one
+above it is rejected.
