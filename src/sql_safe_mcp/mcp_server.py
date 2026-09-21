@@ -10,6 +10,7 @@ from mcp_types import ToolAnnotations
 
 from sql_safe_mcp.config import AppConfig
 from sql_safe_mcp.db.registry import EngineRegistry
+from sql_safe_mcp.diagnostics import configure_logging
 from sql_safe_mcp.errors import DomainError
 from sql_safe_mcp.models import (
     DatabaseList,
@@ -47,11 +48,13 @@ def create_server(config: AppConfig) -> MCPServer[AppContext]:
         finally:
             registry.dispose()
 
+    configure_logging(config.logging.level)
     server: MCPServer[AppContext] = MCPServer(
         "sql-safe-mcp",
         description="Minimal, read-only, PII-safe SQL database navigation.",
         version="1.2.0",
         lifespan=lifespan,
+        log_level=config.logging.level,
     )
 
     @server.tool(annotations=READ_ONLY)

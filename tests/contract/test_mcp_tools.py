@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import logging
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -9,7 +10,7 @@ from mcp import Client
 from mcp_types import TextContent
 from pydantic import SecretStr
 
-from sql_safe_mcp.config import AppConfig, ServerConfig
+from sql_safe_mcp.config import AppConfig, LoggingConfig, ServerConfig
 from sql_safe_mcp.mcp_server import create_server
 
 
@@ -307,3 +308,14 @@ def test_execute_sql_output_schema_is_typed(monkeypatch: Any) -> None:
             }
 
     asyncio.run(scenario())
+
+
+def test_create_server_applies_the_configured_log_level() -> None:
+    config = _config().model_copy(update={"logging": LoggingConfig(level="DEBUG")})
+    logging.getLogger("sql_safe_mcp").setLevel(logging.NOTSET)
+
+    server = create_server(config)
+
+    assert logging.getLogger("sql_safe_mcp").level == logging.DEBUG
+    assert logging.getLogger("sqlalchemy").level == logging.WARNING
+    assert server.settings.log_level == "DEBUG"
