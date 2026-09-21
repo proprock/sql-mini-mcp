@@ -12,7 +12,7 @@ categories `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, and `Security`.
 - Diagnostic logging to stderr, controlled by the new `logging.level` setting (`DEBUG`, `INFO`,
   `WARNING`, or `ERROR`; default `INFO`). It records each database connection attempt (server alias,
   database, elapsed time, and on failure the driver error class, SQLSTATE or code, and message with
-  the connection URL's user name, password, and host removed) and each tool operation's outcome.
+  the connection URL's user name and password masked and its host shown as the server alias) and each tool operation's outcome.
   Connection URLs, credentials, keys, tokens, SQL, bind values, and rows are never logged.
 
 ### Changed

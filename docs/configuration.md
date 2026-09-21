@@ -196,8 +196,8 @@ logging:
 | `WARNING`, `ERROR` | Failures only. |
 
 A failed connection or operation logs the driver error class, the SQLSTATE or numeric code, and the
-driver message. The connection URL's user name, password, and host are removed from that message,
-control characters are replaced, and long messages are truncated. A `TIMEOUT` or
+driver message. The connection URL's user name and password are replaced with `***` and its host with the
+server alias in that message, control characters are replaced, and long messages are truncated. A `TIMEOUT` or
 `CONNECTION_FAILED` error shown to the caller carries a `Reference`; the same value appears as
 `reference=` on the matching log line.
 
