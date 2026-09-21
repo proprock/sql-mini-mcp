@@ -1,5 +1,8 @@
 version: 1
 
+logging:
+  level: INFO
+
 runtime:
   max_concurrent_db_operations: 8
   engine_cache_size: 32

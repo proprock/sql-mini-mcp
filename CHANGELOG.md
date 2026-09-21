@@ -7,6 +7,21 @@ categories `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, and `Security`.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-21
+
+### Added
+
+- Diagnostic logging to stderr, controlled by the new `logging.level` setting (`DEBUG`, `INFO`,
+  `WARNING`, or `ERROR`; default `INFO`). It records each database connection attempt (server alias,
+  database, elapsed time, and on failure the driver error class, SQLSTATE or code, and message with
+  the connection URL's user name and password masked and its host shown as the server alias) and each tool operation's outcome.
+  Connection URLs, credentials, keys, tokens, SQL, bind values, and rows are never logged.
+
+### Changed
+
+- `TIMEOUT` and `CONNECTION_FAILED` errors now carry a `Reference` that matches the `reference=`
+  field of the log line for the same failure.
+
 ## [1.2.0] - 2026-09-20
 
 ### Added

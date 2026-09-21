@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 import time
 from collections.abc import Callable
@@ -25,7 +26,7 @@ def _config(cache_size: int = 1, concurrency: int = 8) -> AppConfig:
         servers={
             "one": ServerConfig(
                 engine="sqlserver",
-                connection_url=SecretStr("mssql+pyodbc://u:p@one/master?driver=x"),
+                connection_url=SecretStr("mssql+pyodbc://u:p@sql-host/master?driver=x"),
             )
         },
     )
@@ -218,3 +219,80 @@ def test_registry_removes_no_backslash_escapes_from_mysql_sessions(
         "SET SESSION sql_mode = %s", ("ANSI_QUOTES,STRICT_TRANS_TABLES",)
     )
     cursor.close.assert_called_once_with()
+
+
+class _ConnectFailure(Exception):
+    """Shaped like pyodbc.Error: args are (sqlstate, message)."""
+
+
+def _registry_with_listeners(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[EngineRegistry, dict[str, Callable[..., object]]]:
+    listeners: dict[str, Callable[..., object]] = {}
+
+    def listens_for(
+        _target: object, name: str
+    ) -> Callable[[Callable[..., object]], Callable[..., object]]:
+        def register(fn: Callable[..., object]) -> Callable[..., object]:
+            listeners.setdefault(name, fn)
+            return fn
+
+        return register
+
+    monkeypatch.setattr("sql_safe_mcp.db.registry.create_engine", Mock())
+    monkeypatch.setattr("sql_safe_mcp.db.registry.event.listens_for", listens_for)
+    registry = EngineRegistry(_config())
+    registry.get("one", "db1")
+    return registry, listeners
+
+
+def test_successful_connect_is_logged_with_alias_database_and_elapsed(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    _, listeners = _registry_with_listeners(monkeypatch)
+    dialect = Mock()
+    dialect.connect.return_value = "dbapi-connection"
+    caplog.set_level(logging.INFO, logger="sql_safe_mcp")
+
+    result = listeners["do_connect"](dialect, Mock(), ("dsn",), {"timeout": 5})
+
+    assert result == "dbapi-connection"
+    dialect.connect.assert_called_once_with("dsn", timeout=5)
+    assert "connect ok server=one database=db1 elapsed_ms=" in caplog.text
+
+
+def test_failed_connect_is_logged_without_secrets_and_reraised(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    _, listeners = _registry_with_listeners(monkeypatch)
+    dialect = Mock()
+    failure = _ConnectFailure("28000", "[28000] Login failed for user 'u' (pwd p) on sql-host")
+    dialect.connect.side_effect = failure
+    caplog.set_level(logging.INFO, logger="sql_safe_mcp")
+
+    with pytest.raises(_ConnectFailure):
+        listeners["do_connect"](dialect, Mock(), ("dsn",), {})
+
+    assert "connect failed server=one database=db1 elapsed_ms=" in caplog.text
+    assert "sqlstate=28000" in caplog.text
+    assert "Login failed for user" in caplog.text
+    for leaked in ("'u'", "pwd p", "sql-host"):
+        assert leaked not in caplog.text
+    assert "on one" in caplog.text
+    assert "mssql+pyodbc" not in caplog.text
+
+
+def test_engine_creation_and_eviction_are_logged_at_debug(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr("sql_safe_mcp.db.registry.create_engine", Mock())
+    monkeypatch.setattr("sql_safe_mcp.db.registry.event.listens_for", lambda *_args: lambda fn: fn)
+    registry = EngineRegistry(_config(cache_size=1))
+    caplog.set_level(logging.DEBUG, logger="sql_safe_mcp")
+
+    registry.get("one", "db1")
+    registry.get("one", "db2")
+
+    assert "engine created server=one engine=sqlserver database=db1" in caplog.text
+    assert "engine evicted server=one database=db1" in caplog.text
+    assert "mssql+pyodbc" not in caplog.text

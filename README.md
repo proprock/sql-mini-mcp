@@ -57,6 +57,9 @@ databases, tables, columns, keys, indexes, stored procedures - and, on servers y
   resistance), a live attack run against a really writable login with before/after snapshots, and
   mutation testing. Results are in
   [Verification of the SQL boundary](SECURITY-MODEL.md#verification-of-the-sql-boundary).
+- **Diagnosable failures** - a timeout or connection error carries a `Reference`, and the stderr
+  log records the connection stage, elapsed time, and driver error for the same reference, with
+  credentials removed. See [Logging](docs/configuration.md#logging).
 - **On PyPI** - `uvx sql-safe-mcp`, no repo clone required.
 
 | Tool | Access | Purpose |
@@ -96,7 +99,7 @@ or
 pip install sql-safe-mcp
 ```
 
-Pin a version when you want a fixed surface: `uvx sql-safe-mcp==1.2.0`.
+Pin a version when you want a fixed surface: `uvx sql-safe-mcp==1.3.0`.
 
 Requires Python 3.12+, [uv](https://docs.astral.sh/uv/) (or `pip`), and
 [Microsoft ODBC Driver 18 for SQL Server](https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server)

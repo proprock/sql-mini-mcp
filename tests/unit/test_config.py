@@ -336,3 +336,34 @@ def test_malformed_yaml_does_not_echo_source_secret(tmp_path: Path) -> None:
         load_config(path, {})
 
     assert secret not in str(raised.value)
+
+
+_MINIMAL_SERVER = """
+servers:
+  reporting:
+    engine: sqlserver
+    connection_url: mssql+pyodbc://u:p@h/master?driver=x
+"""
+
+
+def test_logging_level_defaults_to_info(tmp_path: Path) -> None:
+    config = load_config(_write(tmp_path, "version: 1\n" + _MINIMAL_SERVER), {})
+
+    assert config.logging.level == "INFO"
+
+
+@pytest.mark.parametrize("level", ["DEBUG", "INFO", "WARNING", "ERROR"])
+def test_logging_level_accepts_standard_levels(tmp_path: Path, level: str) -> None:
+    path = _write(tmp_path, f"version: 1\nlogging:\n  level: {level}\n" + _MINIMAL_SERVER)
+
+    assert load_config(path, {}).logging.level == level
+
+
+@pytest.mark.parametrize("body", ["  level: debug\n", "  level: TRACE\n", "  file: x.log\n"])
+def test_logging_rejects_unknown_levels_and_keys(tmp_path: Path, body: str) -> None:
+    path = _write(tmp_path, "version: 1\nlogging:\n" + body + _MINIMAL_SERVER)
+
+    with pytest.raises(DomainError) as error:
+        load_config(path, {})
+
+    assert "logging" in str(error.value)

@@ -22,6 +22,7 @@ Errors name the missing or invalid setting without printing a URL, key, or secre
 | `version` | Required. Must be `1`. |
 | `servers` | Required. A non-empty map of alias to server settings. |
 | `runtime` | Optional limits; see [Runtime limits](#runtime-limits). |
+| `logging` | Optional; see [Logging](#logging). |
 
 Unknown keys anywhere in the file are a startup error.
 
@@ -176,3 +177,32 @@ Optional, under `runtime:`. A value outside its range is a startup error.
 
 The last four bound the SQL accepted by `execute_sql`; a query at the limit is accepted and one
 above it is rejected.
+
+## Logging
+
+Optional, under `logging:`. The server writes to stderr only, using the standard `logging` module;
+stdout carries MCP messages and nothing else. Claude Desktop keeps stderr in its MCP log, and other
+hosts show it in their own MCP log or console.
+
+```yaml
+logging:
+  level: INFO # DEBUG, INFO, WARNING or ERROR (uppercase)
+```
+
+| Level | What you see |
+|---|---|
+| `INFO` (default) | Each database connection (`connect ok` or `connect failed`, with server alias, database, and `elapsed_ms`) and each tool operation (`operation ok` or `operation failed`, with the tool name). |
+| `DEBUG` | Also engine creation and eviction. |
+| `WARNING`, `ERROR` | Failures only. |
+
+A failed connection or operation logs the driver error class, the SQLSTATE or numeric code, and the
+driver message. The connection URL's user name and password are replaced with `***` and its host with the
+server alias in that message, control characters are replaced, and long messages are truncated. A `TIMEOUT` or
+`CONNECTION_FAILED` error shown to the caller carries a `Reference`; the same value appears as
+`reference=` on the matching log line.
+
+Reading a failure: `connect failed ... elapsed_ms=` near the login timeout points at reaching or
+logging in to the server, while `operation failed` after a `connect ok` points at the query itself.
+
+Connection URLs, credentials, keys, tokens, SQL text, bind values, and result rows are never
+logged. SQLAlchemy's own statement logging stays off at every level.

@@ -16,6 +16,10 @@ SQL validation is an allowlist. Unknown syntax, cross-database names, unresolved
 unsupported lineage, and unsupported protected-value types fail closed. The executor accepts only a
 `ValidatedQuery` created after the final AST check.
 
+Diagnostic logs go to stderr. A logged database error is limited to its class, SQLSTATE or code,
+and message; the message has the connection URL's user name and password replaced with `***`,
+its host replaced with the server alias, and its control characters replaced.
+
 Errors must explain the safe cause and, when known, the caller's corrective action. Logs and
 model-visible errors must not expose URLs, credentials, keys, tokens, SQL bind values, database
 metadata, or result rows.
