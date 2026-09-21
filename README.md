@@ -11,7 +11,7 @@ A read-only, PII-safe SQL Server, MySQL and MariaDB MCP server for coding agents
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 [![Model Context Protocol compatible](https://img.shields.io/badge/Model_Context_Protocol-compatible-000000?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)
-[![MCP Registry: io.github.proprock/sql-safe-mcp](https://img.shields.io/badge/MCP_Registry-io.github.proprock%2Fsql--mini--mcp-000000?logo=modelcontextprotocol&logoColor=white)](server.json)
+[![MCP Registry: io.github.proprock/sql-safe-mcp](https://img.shields.io/badge/MCP_Registry-io.github.proprock%2Fsql--safe--mcp-000000?logo=modelcontextprotocol&logoColor=white)](server.json)
 
 <img src="https://raw.githubusercontent.com/proprock/sql-safe-mcp/master/images/luna-guard.jpg" alt="Read the data. Protect the identity." width="760">
 
