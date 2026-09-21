@@ -53,6 +53,17 @@ servers:
 URL-encoded before substitution, so a password containing `@` or `/` is safe. A missing variable is
 a startup error.
 
+Because of that encoding, a variable must hold one URL part. Keep the host and the port in separate
+variables; a `host:port` value would have its `:` encoded and the driver would look for a host that
+does not exist, then fail after its login timeout. A startup error catches an encoded character in
+the host:
+
+```yaml
+# DEV_SQL_HOST=10.12.11.107  DEV_SQL_PORT=1433
+connection_url: "mssql+pyodbc://${DEV_SQL_USER}:${DEV_SQL_PASSWORD}@${DEV_SQL_HOST}:${DEV_SQL_PORT}/master?driver=ODBC+Driver+18+for+SQL+Server"
+```
+
+
 ## PII-safe servers
 
 `pii_safe` enables `execute_sql` for a server alias. Such an alias requires its own base64-encoded 32-byte key in the variable named by `pii_key_env`,

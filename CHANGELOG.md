@@ -7,6 +7,14 @@ categories `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, and `Security`.
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-09-21
+
+### Changed
+
+- A `${NAME}` placeholder embedded in `connection_url` whose value puts an encoded character into
+  the host, such as a `host:port` value whose `:` becomes `%3A`, is now a startup error that names
+  the cause. Before, the server started and every call failed after the driver's login timeout.
+
 ## [1.3.0] - 2026-09-21
 
 ### Added

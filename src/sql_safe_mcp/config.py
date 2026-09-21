@@ -75,6 +75,8 @@ class PiiConfig(BaseModel):
     rules: list[PiiRule] = Field(min_length=1)
 
 
+_PERCENT_ESCAPE = re.compile(r"%[0-9A-Fa-f]{2}")
+
 _DRIVERNAMES = {
     "sqlserver": "mssql+pyodbc",
     "mysql": "mysql+pymysql",
@@ -102,7 +104,14 @@ class ServerConfig(BaseModel):
         elif self.pii_key_env is not None or self.pii is not None:
             raise ValueError("metadata servers cannot configure pii_key_env or pii rules")
 
-        driver = make_url(self.connection_url.get_secret_value()).drivername
+        url = make_url(self.connection_url.get_secret_value())
+        if url.host and _PERCENT_ESCAPE.search(url.host):
+            raise ValueError(
+                "connection_url host contains an encoded character; a ${NAME} placeholder inside "
+                "a URL is URL-encoded, so a 'host:port' value breaks. "
+                "Use separate ${HOST} and ${PORT} variables"
+            )
+        driver = url.drivername
         expected = _DRIVERNAMES[self.engine]
         if driver != expected:
             raise ValueError(f"engine {self.engine!r} requires SQLAlchemy dialect {expected!r}")
