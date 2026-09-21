@@ -4,6 +4,7 @@ import base64
 from pathlib import Path
 
 import pytest
+from sqlalchemy.engine import make_url
 
 from sql_safe_mcp.config import load_config
 from sql_safe_mcp.errors import DomainError
@@ -367,3 +368,53 @@ def test_logging_rejects_unknown_levels_and_keys(tmp_path: Path, body: str) -> N
         load_config(path, {})
 
     assert "logging" in str(error.value)
+
+
+_HOST_PLACEHOLDER_CONFIG = """
+version: 1
+servers:
+  dev:
+    engine: sqlserver
+    connection_url: mssql+pyodbc://${USER}:${PASSWORD}@${SERVER}/master?driver=ODBC+Driver+18+for+SQL+Server
+"""
+
+
+def test_host_and_port_in_one_embedded_placeholder_is_rejected_with_a_hint(
+    tmp_path: Path,
+) -> None:
+    env = {"USER": "sa", "PASSWORD": "s3cr3t#", "SERVER": "10.12.11.107:1433"}
+
+    with pytest.raises(DomainError) as raised:
+        load_config(_write(tmp_path, _HOST_PLACEHOLDER_CONFIG), env)
+
+    message = str(raised.value)
+    assert "servers.dev" in message
+    assert "host" in message
+    assert "separate" in message
+    for leaked in ("10.12.11.107", "1433", "s3cr3t", "%3A"):
+        assert leaked not in message
+
+
+def test_host_and_port_in_separate_placeholders_load(tmp_path: Path) -> None:
+    text = _HOST_PLACEHOLDER_CONFIG.replace("${SERVER}", "${HOST}:${PORT}")
+    env = {"USER": "sa", "PASSWORD": "s3cr3t#", "HOST": "10.12.11.107", "PORT": "1433"}
+
+    config = load_config(_write(tmp_path, text), env)
+
+    url = make_url(config.servers["dev"].connection_url.get_secret_value())
+    assert (url.host, url.port, url.password) == ("10.12.11.107", 1433, "s3cr3t#")
+
+
+def test_a_whole_url_placeholder_may_carry_host_and_port(tmp_path: Path) -> None:
+    text = """
+version: 1
+servers:
+  dev:
+    engine: sqlserver
+    connection_url: ${DEV_URL}
+"""
+    env = {"DEV_URL": "mssql+pyodbc://sa:p@10.12.11.107:1433/master?driver=x"}
+
+    config = load_config(_write(tmp_path, text), env)
+
+    assert make_url(config.servers["dev"].connection_url.get_secret_value()).port == 1433
