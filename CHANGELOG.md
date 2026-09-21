@@ -7,6 +7,8 @@ categories `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, and `Security`.
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-09-21
+
 ### Changed
 
 - A `${NAME}` placeholder embedded in `connection_url` whose value puts an encoded character into
