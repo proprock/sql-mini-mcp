@@ -6,7 +6,7 @@ A read-only, PII-safe SQL Server, MySQL and MariaDB MCP server for coding agents
 
 [![CI](https://github.com/proprock/sql-safe-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/proprock/sql-safe-mcp/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/proprock/sql-safe-mcp)](https://github.com/proprock/sql-safe-mcp/releases)
-[![PyPI Version](https://img.shields.io/pypi/v/sql-safe-mcp?cacheSeconds=3600)](https://pypi.org/project/sql-safe-mcp/)
+[![PyPI Version](https://img.shields.io/pypi/v/sql-safe-mcp)](https://pypi.org/project/sql-safe-mcp/)
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
