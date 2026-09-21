@@ -71,8 +71,19 @@ plus `pii.rules` listing the protected columns:
 
 ```powershell
 $bytes = New-Object byte[] 32
-[System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+try {
+    $rng.GetBytes($bytes)
+} finally {
+    $rng.Dispose()
+}
 $env:LEGACY_PROD_PII_KEY = [Convert]::ToBase64String($bytes)
+```
+
+Example output (generate your own key; do not reuse this value):
+
+```text
+XdTYCuhE/m7zMoiVwlonk6L6Bjxt6R2uqoso3MMRKRc=
 ```
 
 ```bash

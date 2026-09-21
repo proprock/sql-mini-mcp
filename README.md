@@ -2,7 +2,9 @@
 
 # sql-safe-mcp
 
-A read-only, PII-safe SQL Server, MySQL and MariaDB MCP server for coding agents: schema knowledge and safe queries, with no way to change or leak data.
+A PII-safe, read-only MCP server for coding agents working with SQL Server, MySQL and MariaDB:
+schema knowledge and safe queries without write-capable tools or plaintext exposure of configured
+PII columns.
 
 [![CI](https://github.com/proprock/sql-safe-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/proprock/sql-safe-mcp/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/proprock/sql-safe-mcp)](https://github.com/proprock/sql-safe-mcp/releases)
@@ -21,31 +23,32 @@ A read-only, PII-safe SQL Server, MySQL and MariaDB MCP server for coding agents
 
 <!-- mcp-name: io.github.proprock/sql-safe-mcp -->
 
-General-purpose database MCP servers hand the agent a raw SQL prompt and dozens of tools. This
-server gives a coding agent the schema knowledge it needs to write correct code - servers,
-databases, tables, columns, keys, indexes, stored procedures - and, on servers you mark
-`pii_safe`, a way to look at real rows without ever seeing the personal data in them.
+Give a coding agent the schema knowledge it needs to write correct code - servers, databases,
+tables, columns, keys, indexes, and stored procedures. On aliases you mark `pii_safe`, it can also
+query real rows while configured personal data stays hidden behind authenticated tokens.
 
-## Read-only by design. PII-safe by default
+## PII-safe by default. Read-only by design.
 
-- **Read-only by construction** - seven tools, all annotated read-only. No tool writes data, and
-  the server never executes SQL an agent wrote: metadata comes from SQLAlchemy Inspector and fixed
-  catalog queries, and `execute_sql` runs only a validated, regenerated `SELECT`.
 - **PII-safe by default** - on a `pii_safe` server, the columns you configure come back as
   alias-bound, authenticated tokens (`pii:v1:...`), never as plaintext. An agent can still
   project, count, and filter on them with `=` and `IN` using tokens it was given, so it can follow
   a record without reading it. Tokens do not work on another server alias or with another key.
+- **Read-only by construction** - seven tools, all annotated read-only. No tool writes data, and
+  the server never executes SQL an agent wrote: metadata comes from SQLAlchemy Inspector and fixed
+  catalog queries, and `execute_sql` runs only a validated, regenerated `SELECT`.
+- **Multiple servers, isolated policies** - one MCP process can expose multiple named SQL Server,
+  MySQL, and MariaDB instances. Each alias has its own connection, access level, and, when enabled,
+  PII key and protection rules. Every database operation targets an explicit alias; there is no
+  network discovery.
+
+## Operational safeguards
+
 - **Fails closed** - SQL validation is an allowlist. Unknown syntax, unresolved lineage, and
   unsupported protected-value types are refused, not guessed at. The verification evidence is in
   the [security model](SECURITY-MODEL.md).
 - **Least access first** - `access_level: metadata` (the default) exposes schema only;
   `execute_sql` needs an explicit `pii_safe` alias with its own key. Database permissions stay the
   primary control, so use a least-privilege login.
-
-## Also
-
-- **Your aliases, not your network** - the agent sees only the server aliases you configure. There
-  is no network discovery, and the catalog is not published as MCP resources.
 - **Secrets stay out of sight** - connection URLs live in YAML with `${NAME}` placeholders resolved
   from the environment. They never appear in logs or model-visible errors.
 - **Compact, predictable output** - object-rooted results with stable sorting, literal
@@ -60,7 +63,6 @@ databases, tables, columns, keys, indexes, stored procedures - and, on servers y
 - **Diagnosable failures** - a timeout or connection error carries a `Reference`, and the stderr
   log records the connection stage, elapsed time, and driver error for the same reference, with
   credentials removed. See [Logging](docs/configuration.md#logging).
-- **On PyPI** - `uvx sql-safe-mcp`, no repo clone required.
 
 | Tool | Access | Purpose |
 |---|---|---|
@@ -78,16 +80,9 @@ databases, tables, columns, keys, indexes, stored procedures - and, on servers y
 > database is the catalog, and `execute_sql` uses `LIMIT` instead of `TOP`. See
 > [ARCHITECTURE.md](ARCHITECTURE.md).
 
-- [Install](#install)
-- [Configure](#configure)
-- [PII-safe queries](#pii-safe-queries)
-- [Security](#security)
-- [Contributing](#contributing)
+## Quick start
 
-More detail lives in [`docs/`](docs): the [configuration reference](docs/configuration.md),
-[what the tools return](docs/tools.md), and the [security model](SECURITY-MODEL.md).
-
-## Install
+### Install
 
 ```bash
 uvx sql-safe-mcp
@@ -108,10 +103,10 @@ else.
 
 Verified against SQL Server 2022, MySQL 8.4, and MariaDB 11.4 (see [CHECKS.md](CHECKS.md)).
 
-## Configure
+### Configure multiple servers
 
-Copy [sql-safe-mcp.example.yaml](sql-safe-mcp.example.yaml) to `sql-safe-mcp.yaml`, list your
-servers, and keep credentials in environment variables:
+Copy [sql-safe-mcp.example.yaml](sql-safe-mcp.example.yaml) to `sql-safe-mcp.yaml`. Add each
+database server under a named alias and keep credentials in environment variables:
 
 ```yaml
 version: 1
@@ -120,36 +115,33 @@ servers:
     engine: sqlserver
     access_level: metadata
     connection_url: "${REPORTING_SQL_URL}"
-```
 
-`connection_url` is a SQLAlchemy URL whose dialect must match `engine`. It is a secret, so keep the
-credentials in environment variables and reference them with `${NAME}`:
-
-```yaml
-servers:
-  # The whole URL comes from one variable (it may hold any valid URL).
-  reporting:
-    engine: sqlserver
-    connection_url: "${REPORTING_SQL_URL}"
-
-  # SQL Server (mssql+pyodbc), URL assembled from parts. Embedded placeholders are
-  # URL-encoded, so a password containing @ or / is safe.
   billing:
     engine: sqlserver
-    connection_url: >-
-      mssql+pyodbc://${BILLING_USER}:${BILLING_PASSWORD}@${BILLING_HOST}/master
-      ?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes
+    access_level: pii_safe
+    connection_url: "${BILLING_SQL_URL}"
+    pii_key_env: BILLING_PII_KEY
+    pii:
+      rules:
+        - database: Billing
+          schema: dbo
+          table: Customers
+          columns: [Email, FullName]
 
-  # MySQL or MariaDB (mysql+pymysql). Use engine: mariadb for MariaDB.
   shop:
     engine: mysql
+    access_level: metadata
     connection_url: "mysql+pymysql://${SHOP_USER}:${SHOP_PASSWORD}@db.internal/shop"
 ```
 
-A missing variable, or an `engine` that does not match the URL dialect, stops the server at startup.
+Here `reporting`, `billing`, and `shop` are the values an agent passes as `server`. Their
+credentials and access policies are independent. A missing variable, or an `engine` that does not
+match the URL dialect, stops the MCP server at startup.
 
-Point the server at the file with `SQL_SAFE_MCP_CONFIG` (or `--config`), and check it without
-connecting to any database:
+### Check the configuration
+
+After defining every environment variable referenced by the YAML file, point the server at it with
+`SQL_SAFE_MCP_CONFIG` (or `--config`) and check it without connecting to any database:
 
 ```bash
 SQL_SAFE_MCP_CONFIG=sql-safe-mcp.yaml uvx sql-safe-mcp --check-config
@@ -158,8 +150,13 @@ SQL_SAFE_MCP_CONFIG=sql-safe-mcp.yaml uvx sql-safe-mcp --check-config
 Configuration is validated at startup, and an error names the problem without printing a URL or
 secret. Keep credentials in the host's own configuration and never commit them. The server acts
 with the database account's permissions, so use a dedicated login with the least access the job
-needs. Every setting, including the runtime limits, is in
-[configuration.md](docs/configuration.md).
+needs.
+
+### Connect an MCP client
+
+Every client configuration needs `SQL_SAFE_MCP_CONFIG` plus the environment variables referenced
+by your YAML file. Keep connection URLs and PII keys in the MCP host's environment or
+configuration, never in the YAML file or other tracked files.
 
 <details>
 <summary><b>Claude Code</b></summary>
@@ -168,15 +165,15 @@ needs. Every setting, including the runtime limits, is in
 claude mcp add --env SQL_SAFE_MCP_CONFIG=/path/to/sql-safe-mcp.yaml --env REPORTING_SQL_URL=mssql+pyodbc://... --transport stdio sql-safe -- uvx sql-safe-mcp
 ```
 
-Put at least one other option between the last `--env` and the server name, as above - the CLI
-otherwise reads the name as another `KEY=value` pair.
+Put at least one other option between the last `--env` and the server name, as above. Otherwise,
+the CLI reads the name as another `KEY=value` pair.
 
 </details>
 
 <details>
 <summary><b>Claude Desktop</b></summary>
 
-In `claude_desktop_config.json`:
+Add the server to `claude_desktop_config.json`:
 
 ```json
 {
@@ -207,42 +204,43 @@ codex mcp add sql-safe --env SQL_SAFE_MCP_CONFIG=/path/to/sql-safe-mcp.yaml --en
 <details>
 <summary><b>Any other stdio host</b></summary>
 
-Command `uvx`, argument `sql-safe-mcp`, and the environment variables your configuration
-references, plus `SQL_SAFE_MCP_CONFIG`. The server speaks MCP over stdio and logs only to stderr.
+Use command `uvx`, argument `sql-safe-mcp`, and set `SQL_SAFE_MCP_CONFIG` plus every environment
+variable referenced by the configuration file. The server writes MCP messages to stdout and logs
+only to stderr.
 
 </details>
 
 ## PII-safe queries
 
-Mark an alias `access_level: pii_safe`, give it its own key, and list the protected columns:
+`execute_sql` on the `billing` alias allows one restricted `SELECT`. For example, these arguments:
 
-```yaml
-servers:
-  legacy_prod:
-    engine: sqlserver
-    access_level: pii_safe
-    connection_url: "${LEGACY_PROD_SQL_URL}"
-    pii_key_env: LEGACY_PROD_PII_KEY
-    pii:
-      rules:
-        - database: "*"
-          schema: dbo
-          table: Users
-          columns: [Email, FirstName, LastName]
+```json
+{
+  "server": "billing",
+  "database": "Billing",
+  "sql": "SELECT CustomerId, Email FROM dbo.Customers"
+}
 ```
 
-`execute_sql` then accepts one restricted `SELECT`. Protected cells come back as tokens, and a
-token is accepted only in `=` and `IN` predicates on the same alias. Protection covers the columns
-you list, so list every column that holds personal data. The rule format, key generation, and the
-accepted SQL are in [configuration.md](docs/configuration.md) and [tools.md](docs/tools.md).
+can return a row such as `[42, "pii:v1:..."]`: the agent can follow the customer without reading
+the email address. A token is accepted only in `=` and `IN` predicates on the same protected column
+and server alias. Protection covers the columns you list, so list every column that holds personal
+data.
+
+## Documentation
+
+- [Configuration reference](docs/configuration.md) - aliases, connection URLs, PII rules, runtime
+  limits, and logging.
+- [Tool reference](docs/tools.md) - arguments, responses, errors, and the accepted SQL subset.
+- [Security model](SECURITY-MODEL.md) - trust boundaries, guarantees, limitations, and verification.
+- [Checks](CHECKS.md) - local, integration, and security verification commands.
 
 ## Security
 
-The MCP caller, SQL input, database metadata, rows, and tokens are untrusted; the operator, the
-process environment, and the database credentials are the trusted boundary. Database permissions
-remain the primary authorization control - this server never widens them. The full model and its
-verification are in [SECURITY-MODEL.md](SECURITY-MODEL.md). To report a vulnerability,
-use the private channel in [SECURITY.md](SECURITY.md).
+The MCP caller, SQL input, database metadata, rows, and tokens are untrusted. Database permissions
+remain the primary authorization control - this server never widens them. Read the full
+[security model](SECURITY-MODEL.md), including its limitations and verification evidence. To report
+a vulnerability, use the private channel in [SECURITY.md](SECURITY.md).
 
 ## Contributing
 
