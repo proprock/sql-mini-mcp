@@ -7,6 +7,8 @@ categories `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, and `Security`.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-21
+
 ### Added
 
 - Diagnostic logging to stderr, controlled by the new `logging.level` setting (`DEBUG`, `INFO`,
