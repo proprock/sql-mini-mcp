@@ -139,7 +139,7 @@ uv run mutmut results
 uv run mutmut show <mutant>
 ```
 
-Every survivor is either killed by a new test or recorded as equivalent in `SECURITY-MODEL.md` with a
+Every survivor is either killed by a new test or recorded as equivalent in `security-model.md` with a
 proof. Message wording is pinned through the fixed `Reason` catalog, so mutation of a message
 string is not accepted as equivalent. An interrupted run is not evidence.
 

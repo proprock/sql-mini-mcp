@@ -34,7 +34,7 @@ Use `feature/` branches. Write a focused failing test before each behavior chang
 small and use Conventional Commit subjects. Fast checks run for every task. The live SQL Server suite
 is mandatory before a milestone is closed or merged, and during any task that changes SQL
 generation, execution, result encoding, or reflection (see the milestone live gate in
-[CHECKS.md](CHECKS.md)). Deep security checks run before merging the corresponding milestone.
+[checks.md](checks.md)). Deep security checks run before merging the corresponding milestone.
 Squash merge reviewed feature branches and delete them after merge.
 
 Run the configured `prek` hooks before committing and never bypass them with `--no-verify`. Do not
@@ -54,7 +54,7 @@ Registry. Creating or pushing a release tag requires the maintainer's explicit i
 
 Closing a milestone always means cutting a release. Before the milestone's pull request is
 opened, ask the user for the version number; do not choose it. The suggested bump follows
-[CONTRIBUTING.md](CONTRIBUTING.md) (additive capability is MINOR, a fix alone is PATCH), but the
+[CONTRIBUTING.md](../CONTRIBUTING.md) (additive capability is MINOR, a fix alone is PATCH), but the
 user decides.
 
 Make every release edit in the milestone pull request itself, so that after it merges only the tag

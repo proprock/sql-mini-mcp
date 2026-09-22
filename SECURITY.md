@@ -53,4 +53,4 @@ Problems in this server's own code, such as:
   are untrusted input to the agent that reads them; treat them that way.
 
 How the server protects data, and the evidence behind it, is described in
-[SECURITY-MODEL.md](SECURITY-MODEL.md).
+[security-model.md](docs/security-model.md).

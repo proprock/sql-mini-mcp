@@ -1,7 +1,7 @@
 # Security model
 
 How sql-safe-mcp protects data, and the evidence behind it. To report a vulnerability, see
-[SECURITY.md](SECURITY.md).
+[SECURITY.md](../SECURITY.md).
 
 ## Trust boundary
 
@@ -25,12 +25,12 @@ model-visible errors must not expose URLs, credentials, keys, tokens, SQL bind v
 metadata, or result rows.
 
 Before merging security changes, run the adversarial, property-based, integration, and mutation
-gates described in [CHECKS.md](CHECKS.md). Every security-relaxing non-equivalent mutant must be
+gates described in [checks.md](checks.md). Every security-relaxing non-equivalent mutant must be
 killed.
 
 ## Verification of the SQL boundary
 
-`execute_sql` is verified by layered evidence, all described in [CHECKS.md](CHECKS.md):
+`execute_sql` is verified by layered evidence, all described in [checks.md](checks.md):
 
 - an adversarial corpus of 292 hostile statements (`tests/security/corpus`) that must fail with
   their expected code without reaching the database;
@@ -85,4 +85,4 @@ member of `security/reasons.py`, `reject()` refuses anything else, and tests pin
   existing tokens.
 - Use a local, disposable, or explicitly non-production database for development and testing, never
   stored production credentials or data, and never commit raw database captures; see
-  [CONTRIBUTING.md](CONTRIBUTING.md).
+  [CONTRIBUTING.md](../CONTRIBUTING.md).

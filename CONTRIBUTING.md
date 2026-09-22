@@ -11,10 +11,10 @@ to add. Read [Scope](#scope) before opening a pull request.
 - Tools are read-only and few. There are no write tools, and tables are not published as MCP
   resources. Anything else that changes a database needs maintainer approval.
 - A new or changed tool, argument, default, response schema, or configuration key is a public API
-  change. Read [ARCHITECTURE.md](ARCHITECTURE.md) and [CONVENTIONS.md](CONVENTIONS.md) first, and
+  change. Read [architecture.md](docs/architecture.md) and [conventions.md](docs/conventions.md) first, and
   keep published names and semantics unless a deliberate change is required.
 - Security decisions are allowlists: unknown SQL AST nodes and unresolved lineage fail closed. Read
-  [SECURITY-MODEL.md](SECURITY-MODEL.md) before touching a security boundary.
+  [security-model.md](docs/security-model.md) before touching a security boundary.
 
 Agent-assisted contributions follow the same rules; the repository's [AGENTS.md](AGENTS.md) lists
 them and links the detail documents.
@@ -55,7 +55,7 @@ uv run pytest tests/unit tests/contract --cov=sql_safe_mcp --cov-branch --cov-re
 
 `uv run ruff format .` applies formatting. The last command reports statement and branch coverage
 with missing lines; review it before closing a change. Coverage never replaces behavioral
-assertions. The complete list of gates is in [CHECKS.md](CHECKS.md).
+assertions. The complete list of gates is in [checks.md](docs/checks.md).
 
 ## Tests
 
@@ -79,7 +79,7 @@ SQL Server 2022 container, which needs Docker Desktop in Linux-container mode:
 Each run creates uniquely named objects and removes them afterwards; `-Reset` also removes the
 container and its volume. To use an external disposable server instead, set
 `SQL_SAFE_MCP_TEST_SQLSERVER_URL` and run `uv run pytest tests/integration/sqlserver -m integration`.
-Details are in [CHECKS.md](CHECKS.md).
+Details are in [checks.md](docs/checks.md).
 
 MySQL and MariaDB have their own digest-pinned containers and script, and the release matrix runs
 all three engines together:
@@ -99,7 +99,7 @@ MCPServer -> DatabaseService -> EngineRegistry -> SQLAlchemy Core/Inspector -> D
 `DatabaseService` owns object resolution and response normalization, `EngineRegistry` owns lazy
 engines, and `DatabaseExtras` holds only what SQLAlchemy Inspector cannot portably express. Use
 SQLAlchemy Core and Inspector; there is no ORM. The executor will accept a `ValidatedQuery`, never
-caller-provided SQL. See [ARCHITECTURE.md](ARCHITECTURE.md).
+caller-provided SQL. See [architecture.md](docs/architecture.md).
 
 ## Branches, commits, and pull requests
 
@@ -111,7 +111,7 @@ caller-provided SQL. See [ARCHITECTURE.md](ARCHITECTURE.md).
 - Pull requests are squash-merged and the branch is deleted afterwards.
 - CI (format, lint, types, tests on Python 3.12 and 3.14, package build) must pass.
 
-Full details: [WORKFLOW.md](WORKFLOW.md).
+Full details: [workflow.md](docs/workflow.md).
 
 ## Changelog
 
@@ -132,7 +132,7 @@ it is published to [PyPI](https://pypi.org/project/sql-safe-mcp/) and the MCP Re
 release workflow.
 
 Releases are cut by the maintainer, and closing a milestone always means a release (see
-[WORKFLOW.md](WORKFLOW.md)):
+[workflow.md](docs/workflow.md)):
 
 - The `[Unreleased]` section decides the version: a new tool, setting, or other additive capability
   is a MINOR bump; a fix alone is a PATCH.

@@ -61,7 +61,7 @@ jobs:
         run: uv run ty check
 
       # Docker-backed SQL Server integration tests are intentionally excluded
-      # from hosted CI. They remain an opt-in local gate in CHECKS.md.
+      # from hosted CI. They remain an opt-in local gate in docs/checks.md.
       - name: pytest (unit and contract)
         run: uv run pytest tests/unit tests/contract -q
 

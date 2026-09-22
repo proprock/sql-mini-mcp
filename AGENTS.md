@@ -1,6 +1,6 @@
 # Agent instructions
 
-Read `ARCHITECTURE.md` before changing public contracts or security boundaries.
+Read `docs/architecture.md` before changing public contracts or security boundaries.
 
 - Keep the milestone scope narrow. Do not add database dialects, write tools, HTTP transport, an
   ORM, unrestricted SQL, or other speculative capability without a concrete use case and the
@@ -21,11 +21,11 @@ Read `ARCHITECTURE.md` before changing public contracts or security boundaries.
 - Keep changes and Conventional Commits task-scoped.
 - Do not commit process or instruction-document changes without the user's explicit approval.
 - Closing a milestone always means a release: ask the user for the version number and put every
-  release edit in the milestone PR so only the tag remains (see `WORKFLOW.md`).
+  release edit in the milestone PR so only the tag remains (see `docs/workflow.md`).
 - Create a Git worktree only when the source checkout has uncommitted source changes that must be
   preserved, and only after the user explicitly approves it. Use the existing checkout otherwise.
 - Do not modify `.gitignore` without the user's explicit approval.
 
-See `CONVENTIONS.md`, `SECURITY-MODEL.md`, `CHECKS.md`, `WORKFLOW.md`, and `CHANGELOG.md` for
+See `docs/conventions.md`, `docs/security-model.md`, `docs/checks.md`, `docs/workflow.md`, and `CHANGELOG.md` for
 task-specific detail. For a small mechanical documentation-only edit, this file and the target
 document are sufficient.

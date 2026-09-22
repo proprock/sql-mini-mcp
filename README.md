@@ -45,7 +45,7 @@ query real rows while configured personal data stays hidden behind authenticated
 
 - **Fails closed** - SQL validation is an allowlist. Unknown syntax, unresolved lineage, and
   unsupported protected-value types are refused, not guessed at. The verification evidence is in
-  the [security model](SECURITY-MODEL.md).
+  the [security model](docs/security-model.md).
 - **Least access first** - `access_level: metadata` (the default) exposes database navigation and
   table structure; `meta_and_code` additionally exposes stored procedures; `execute_sql` needs an
   explicit `all_pii_safe` alias with its own key. Database permissions stay the primary control,
@@ -60,7 +60,7 @@ query real rows while configured personal data stays hidden behind authenticated
   adversarial corpus of hostile statements, property-based tests (token isolation, tamper
   resistance), a live attack run against a really writable login with before/after snapshots, and
   mutation testing. Results are in
-  [Verification of the SQL boundary](SECURITY-MODEL.md#verification-of-the-sql-boundary).
+  [Verification of the SQL boundary](docs/security-model.md#verification-of-the-sql-boundary).
 - **Diagnosable failures** - a timeout or connection error carries a `Reference`, and the stderr
   log records the connection stage, elapsed time, and driver error for the same reference, with
   credentials removed. See [Logging](docs/configuration.md#logging).
@@ -79,7 +79,7 @@ query real rows while configured personal data stays hidden behind authenticated
 > **Status:** SQL Server supports every tool. MySQL and MariaDB (`engine: mysql` or `mariadb`,
 > `mysql+pymysql` URLs) support every tool too. `schema` is always `null` there because the
 > database is the catalog, and `execute_sql` uses `LIMIT` instead of `TOP`. See
-> [ARCHITECTURE.md](ARCHITECTURE.md).
+> [architecture.md](docs/architecture.md).
 
 ## Quick start
 
@@ -102,7 +102,7 @@ Requires Python 3.12+, [uv](https://docs.astral.sh/uv/) (or `pip`), and
 when you connect to SQL Server. MySQL and MariaDB use the bundled PyMySQL driver and need nothing
 else.
 
-Verified against SQL Server 2022, MySQL 8.4, and MariaDB 11.4 (see [CHECKS.md](CHECKS.md)).
+Verified against SQL Server 2022, MySQL 8.4, and MariaDB 11.4 (see [checks.md](docs/checks.md)).
 
 <details>
 <summary><b>Or you can even ask an agent to install it</b></summary>
@@ -236,14 +236,14 @@ data.
 - [Configuration reference](docs/configuration.md) - aliases, connection URLs, PII rules, runtime
   limits, and logging.
 - [Tool reference](docs/tools.md) - arguments, responses, errors, and the accepted SQL subset.
-- [Security model](SECURITY-MODEL.md) - trust boundaries, guarantees, limitations, and verification.
-- [Checks](CHECKS.md) - local, integration, and security verification commands.
+- [Security model](docs/security-model.md) - trust boundaries, guarantees, limitations, and verification.
+- [Checks](docs/checks.md) - local, integration, and security verification commands.
 
 ## Security
 
 The MCP caller, SQL input, database metadata, rows, and tokens are untrusted. Database permissions
 remain the primary authorization control - this server never widens them. Read the full
-[security model](SECURITY-MODEL.md), including its limitations and verification evidence. To report
+[security model](docs/security-model.md), including its limitations and verification evidence. To report
 a vulnerability, use the private channel in [SECURITY.md](SECURITY.md).
 
 ## Contributing
