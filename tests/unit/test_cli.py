@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import os
 import subprocess
 import sys
@@ -52,6 +53,34 @@ def test_check_config_uses_environment_path(tmp_path: Path) -> None:
 
     assert result.returncode == 0
     assert "Configuration valid" in result.stdout
+
+
+def test_gen_pii_key_prints_one_valid_key_without_loading_configuration() -> None:
+    result = _run("--gen-pii-key")
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+    keys = result.stdout.splitlines()
+    assert len(keys) == 1
+    assert len(base64.b64decode(keys[0], validate=True)) == 32
+
+
+def test_gen_pii_key_prints_the_requested_number_of_distinct_keys() -> None:
+    result = _run("--gen-pii-key", "3")
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+    keys = result.stdout.splitlines()
+    assert len(keys) == 3
+    assert len(set(keys)) == 3
+    assert all(len(base64.b64decode(key, validate=True)) == 32 for key in keys)
+
+
+def test_gen_pii_key_rejects_non_positive_count() -> None:
+    result = _run("--gen-pii-key", "0")
+
+    assert result.returncode == 2
+    assert "positive integer" in result.stderr
 
 
 def test_invalid_config_returns_two_without_traceback_or_secret(tmp_path: Path) -> None:
