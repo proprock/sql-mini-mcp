@@ -11,6 +11,9 @@ categories `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, and `Security`.
 
 - `sql-safe-mcp --gen-pii-key [N]` generates one base64-encoded 32-byte PII key by default, or
   `N` keys as one value per line, without loading configuration or connecting to a database.
+- PII table rules now accept case-insensitive full shell-glob patterns, and `pii_rules` can define
+  shared unnamed defaults or named sets explicitly included by `pii_safe` aliases. Shared rules are
+  flattened at startup in deterministic default, include, and local order.
 
 ## [1.3.1] - 2026-09-21
 

@@ -5,6 +5,7 @@ import binascii
 import os
 import re
 from collections.abc import Mapping
+from copy import deepcopy
 from pathlib import Path
 from typing import Literal
 from urllib.parse import quote
@@ -17,6 +18,7 @@ from sql_safe_mcp.errors import DomainError, ErrorCode
 
 _ENV_PATTERN = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)\}")
 _FULL_ENV_PATTERN = re.compile(r"^\$\{([A-Z_][A-Z0-9_]*)\}$")
+_SERVER_ALIAS_PATTERN = r"[A-Za-z0-9][A-Za-z0-9._-]*"
 
 
 class RuntimeConfig(BaseModel):
@@ -59,8 +61,8 @@ class PiiRule(BaseModel):
 
     @model_validator(mode="after")
     def validate_wildcards(self) -> PiiRule:
-        if "*" in self.table or (self.schema_ and "*" in self.schema_):
-            raise ValueError("wildcards are allowed only in pii rule database")
+        if self.schema_ and "*" in self.schema_:
+            raise ValueError("wildcards are allowed only in pii rule table or database")
         if self.database != "*" and "*" in self.database:
             raise ValueError("database must be an exact name or '*'")
         folded = [column.casefold() for column in self.columns]
@@ -75,6 +77,22 @@ class PiiConfig(BaseModel):
     rules: list[PiiRule] = Field(min_length=1)
 
 
+class PiiConfigInput(BaseModel):
+    """The YAML-only PII shape before shared rules are resolved."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    include: list[str] = Field(default_factory=list)
+    rules: list[PiiRule] = Field(default_factory=list)
+
+
+class PiiRuleSet(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, pattern=rf"^{_SERVER_ALIAS_PATTERN}$")
+    rules: list[PiiRule] = Field(min_length=1)
+
+
 _PERCENT_ESCAPE = re.compile(r"%[0-9A-Fa-f]{2}")
 
 _DRIVERNAMES = {
@@ -84,26 +102,17 @@ _DRIVERNAMES = {
 }
 
 
-class ServerConfig(BaseModel):
+class ServerConfigBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     engine: Literal["sqlserver", "mysql", "mariadb"]
     access_level: Literal["metadata", "pii_safe"] = "metadata"
     connection_url: SecretStr
     pii_key_env: str | None = Field(default=None, pattern=r"^[A-Z_][A-Z0-9_]*$")
-    pii: PiiConfig | None = None
     pii_key: SecretStr | None = Field(default=None, exclude=True)
 
     @model_validator(mode="after")
-    def validate_security_shape(self) -> ServerConfig:
-        if self.access_level == "pii_safe":
-            if not self.pii_key_env or self.pii is None:
-                raise ValueError("pii_safe servers require pii_key_env and pii rules")
-            if self.engine != "sqlserver" and any(rule.schema_ for rule in self.pii.rules):
-                raise ValueError(f"pii rules for engine {self.engine!r} cannot set schema")
-        elif self.pii_key_env is not None or self.pii is not None:
-            raise ValueError("metadata servers cannot configure pii_key_env or pii rules")
-
+    def validate_connection_url(self) -> ServerConfigBase:
         url = make_url(self.connection_url.get_secret_value())
         if url.host and _PERCENT_ESCAPE.search(url.host):
             raise ValueError(
@@ -123,6 +132,25 @@ class ServerConfig(BaseModel):
         return base64.b64decode(self.pii_key.get_secret_value(), validate=True)
 
 
+class ServerConfig(ServerConfigBase):
+    pii: PiiConfig | None = None
+
+    @model_validator(mode="after")
+    def validate_security_shape(self) -> ServerConfig:
+        if self.access_level == "pii_safe":
+            if not self.pii_key_env or self.pii is None:
+                raise ValueError("pii_safe servers require pii_key_env and pii rules")
+            if self.engine != "sqlserver" and any(rule.schema_ for rule in self.pii.rules):
+                raise ValueError(f"pii rules for engine {self.engine!r} cannot set schema")
+        elif self.pii_key_env is not None or self.pii is not None:
+            raise ValueError("metadata servers cannot configure pii_key_env or pii rules")
+        return self
+
+
+class ServerConfigInput(ServerConfigBase):
+    pii: PiiConfigInput | None = None
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -135,7 +163,7 @@ class AppConfig(BaseModel):
     def validate_aliases_and_keys(self) -> AppConfig:
         seen_keys: dict[bytes, str] = {}
         for alias, server in self.servers.items():
-            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", alias):
+            if not re.fullmatch(_SERVER_ALIAS_PATTERN, alias):
                 raise ValueError(f"invalid server alias {alias!r}")
             key = server.key_bytes()
             if key is None:
@@ -148,6 +176,18 @@ class AppConfig(BaseModel):
                 )
             seen_keys[key] = alias
         return self
+
+
+class AppConfigInput(BaseModel):
+    """Strict top-level YAML shape, including shared PII rule declarations."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    version: Literal[1]
+    runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    pii_rules: list[PiiRuleSet] | None = Field(default=None, min_length=1)
+    servers: dict[str, ServerConfigInput] = Field(min_length=1)
 
 
 def _expand_connection_url(template: str, environ: Mapping[str, str]) -> str:
@@ -178,6 +218,54 @@ def _validation_summary(error: ValidationError) -> str:
     return "; ".join(issues)
 
 
+def _resolve_pii_rules(raw: dict[object, object], config: AppConfigInput) -> dict[object, object]:
+    """Flatten shared PII rules before runtime configuration is constructed."""
+
+    default_rules: list[PiiRule] = []
+    named_rules: dict[str, list[PiiRule]] = {}
+    for rule_set in config.pii_rules or []:
+        if rule_set.name is None:
+            if default_rules:
+                raise ValueError("at most one unnamed pii rule set is allowed")
+            default_rules = rule_set.rules
+            continue
+        if rule_set.name in named_rules:
+            raise ValueError(f"duplicate pii rule set name {rule_set.name!r}")
+        named_rules[rule_set.name] = rule_set.rules
+
+    resolved = deepcopy(raw)
+    resolved.pop("pii_rules", None)
+    servers = resolved["servers"]
+    assert isinstance(servers, dict)
+    for alias, server in config.servers.items():
+        server_data = servers[alias]
+        assert isinstance(server_data, dict)
+        if server.access_level == "metadata":
+            if server.pii is not None:
+                raise ValueError("metadata servers cannot configure pii_key_env or pii rules")
+            continue
+
+        effective_rules = list(default_rules)
+        if server.pii is not None:
+            included: set[str] = set()
+            for name in server.pii.include:
+                if name not in named_rules:
+                    raise ValueError(f"server {alias!r} includes unknown pii rule set {name!r}")
+                if name in included:
+                    raise ValueError(
+                        f"server {alias!r} includes pii rule set {name!r} more than once"
+                    )
+                included.add(name)
+                effective_rules.extend(named_rules[name])
+            effective_rules.extend(server.pii.rules)
+        server_data["pii"] = (
+            {"rules": [rule.model_dump(by_alias=True) for rule in effective_rules]}
+            if effective_rules
+            else None
+        )
+    return resolved
+
+
 def load_config(path: str | Path, environ: Mapping[str, str] | None = None) -> AppConfig:
     env = os.environ if environ is None else environ
     try:
@@ -205,7 +293,8 @@ def load_config(path: str | Path, environ: Mapping[str, str] | None = None) -> A
                 if len(decoded) != 32:
                     raise ValueError(f"PII key for server {alias!r} must decode to 32 bytes")
                 value["pii_key"] = env[key_env]
-        return AppConfig.model_validate(raw)
+        input_config = AppConfigInput.model_validate(raw)
+        return AppConfig.model_validate(_resolve_pii_rules(raw, input_config))
     except ValidationError as exc:
         raise DomainError(
             ErrorCode.CONFIG_ERROR,

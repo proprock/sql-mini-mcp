@@ -219,10 +219,38 @@ def test_pii_rule_validation_errors_are_reported() -> None:
         return str(info.value)
 
     base: dict[str, object] = {"database": "*", "table": "T", "columns": ["c"]}
-    assert "wildcards are allowed only in pii rule database" in summary(dict(base, table="T*"))
-    assert "wildcards are allowed only in pii rule database" in summary(dict(base, schema="s*"))
+    assert "wildcards are allowed only in pii rule table or database" in summary(
+        dict(base, schema="s*")
+    )
     assert "database must be an exact name or '*'" in summary(dict(base, database="a*"))
     assert "pii rule columns must be unique" in summary(dict(base, columns=["c", "C"]))
+
+
+def test_table_patterns_are_valid_pii_rule_configuration() -> None:
+    model = _model(base64.b64encode(bytes(range(32))).decode())
+    server = cast(dict[str, object], model["servers"])["s"]
+    assert isinstance(server, dict)
+    server["pii"] = {
+        "rules": [
+            {"database": "*", "table": pattern, "columns": ["c"]}
+            for pattern in ("T*", "T?", "T[abc]", "T[a-z]", "T[!abc]", "T[*]", "T[[]", "T[]]")
+        ]
+    }
+
+    config = AppConfig.model_validate(model)
+
+    pii = config.servers["s"].pii
+    assert pii is not None
+    assert [rule.table for rule in pii.rules] == [
+        "T*",
+        "T?",
+        "T[abc]",
+        "T[a-z]",
+        "T[!abc]",
+        "T[*]",
+        "T[[]",
+        "T[]]",
+    ]
 
 
 def test_non_ascii_values_survive_loading(tmp_path: Path) -> None:

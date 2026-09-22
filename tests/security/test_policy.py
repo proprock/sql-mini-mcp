@@ -7,7 +7,7 @@ from sqlglot import exp
 from sql_safe_mcp.config import PiiConfig, PiiRule
 from sql_safe_mcp.errors import DomainError, ErrorCode
 from sql_safe_mcp.security.dialect import SQLSERVER
-from sql_safe_mcp.security.lineage import analyze_query
+from sql_safe_mcp.security.lineage import SourceColumn, analyze_query
 from sql_safe_mcp.security.parser import ParserLimits, parse_select
 from sql_safe_mcp.security.policy import PiiPolicy, PolicyDecision
 from sql_safe_mcp.security.schema import resolve_tables
@@ -156,6 +156,34 @@ def test_rule_matching_is_case_insensitive() -> None:
     query = parse_select("SELECT email FROM users", LIMITS)
     analyzed = analyze_query(query, resolve_tables(query, Catalog()), LIMITS, SQLSERVER)
     assert PiiPolicy("d", config, CODEC).evaluate(analyzed).protected == (True,)
+
+
+@pytest.mark.parametrize(
+    ("pattern", "matching_table", "other_table"),
+    [
+        ("User*", "Users", "Account"),
+        ("User?", "Users", "User12"),
+        ("User[rs]", "Users", "Userx"),
+        ("User[a-z]", "Users", "User1"),
+        ("User[!a-r]", "Users", "Userr"),
+        ("User[*]", "User*", "Users"),
+        ("User[?]", "User?", "Users"),
+        ("User[[]", "User[", "Users"),
+        ("User[]]", "User]", "Users"),
+    ],
+)
+def test_table_patterns_are_case_insensitive_full_matches(
+    pattern: str, matching_table: str, other_table: str
+) -> None:
+    policy = PiiPolicy(
+        "APP",
+        PiiConfig(rules=[PiiRule(database="app", table=pattern, columns=["EMAIL"])]),
+        CODEC,
+    )
+
+    assert policy.is_protected(SourceColumn("dbo", matching_table.lower(), "email"))
+    assert not policy.is_protected(SourceColumn("dbo", other_table, "email"))
+    assert not policy.is_protected(SourceColumn("dbo", matching_table, "phone"))
 
 
 def test_token_sites_carry_decrypted_values_without_exposing_them_in_repr() -> None:
