@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from fnmatch import fnmatchcase
 
 from sqlglot import exp
 
@@ -42,7 +43,9 @@ class PiiPolicy:
                 continue
             if rule.schema_ is not None and rule.schema_.casefold() != schema:
                 continue
-            if rule.table.casefold() == table and column in {c.casefold() for c in rule.columns}:
+            if fnmatchcase(table, rule.table.casefold()) and column in {
+                item.casefold() for item in rule.columns
+            }:
                 return True
         return False
 

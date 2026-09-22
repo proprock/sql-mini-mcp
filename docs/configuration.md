@@ -67,7 +67,8 @@ connection_url: "mssql+pyodbc://${DEV_SQL_USER}:${DEV_SQL_PASSWORD}@${DEV_SQL_HO
 ## PII-safe servers
 
 `pii_safe` enables `execute_sql` for a server alias. Such an alias requires its own base64-encoded 32-byte key in the variable named by `pii_key_env`,
-plus `pii.rules` listing the protected columns:
+plus at least one effective PII rule. Effective rules can be local under `pii.rules`, inherited
+from an unnamed default set, or explicitly included from named shared sets.
 
 ```
 sql-safe-mcp --gen-pii-key
@@ -90,18 +91,29 @@ or renaming an alias will invalidate existing tokens. A `metadata` server must n
 
 ### PII rules
 
-`pii.rules` is a non-empty list. Each rule protects columns of one table:
+Each `pii.rules` entry protects columns of tables selected by one table pattern:
 
 | Key | Meaning |
 |---|---|
-| `database` | Required. An exact database name, or `"*"` for every database. `"*"` is the only wildcard allowed anywhere in a rule. |
+| `database` | Required. An exact database name, or the whole value `"*"` for every database. |
 | `schema` | Optional, SQL Server only. Omitted means the table is protected in every schema. Must not be set for `mysql` or `mariadb`. |
-| `table` | Required. An exact table name. |
+| `table` | Required shell-glob pattern, matched case-insensitively against the complete resolved table name. |
 | `columns` | Required. A non-empty list of column names, unique ignoring case. |
 
-Names match case-insensitively. Only listed columns are protected, so list every column that holds
-personal data. On MySQL and MariaDB the database is the catalog: `database` is the MySQL database
-name and the rule has no `schema`.
+`table` uses standard shell-glob syntax: `*` matches zero or more characters, `?` exactly one,
+`[abc]` a character class, `[a-z]` a range, and `[!abc]` a negated class. It is always a full
+match, not a substring match. `database`, `schema`, and `columns` do not become patterns; their
+existing exact matching rules remain unchanged. Names match case-insensitively. Only listed columns
+are protected, so list every column that holds personal data. On MySQL and MariaDB the database is
+the catalog: `database` is the MySQL database name and the rule has no `schema`.
+
+Migration note: an existing exact table name containing `?`, `[` or `]` is now interpreted as a
+glob. Use `[*]`, `[?]`, `[[]`, and `[]]` to match literal `*`, `?`, `[`, and `]`, respectively.
+
+For example, `Customer*` matches `Customer` and `CustomerArchive`; `Users[0-9]?` matches
+`Users1a` and `Users42`; and `Audit[!0-9]` matches `AuditX` but not `Audit7`. To match literal
+glob characters, use patterns such as `Legacy[?]` for the table `Legacy?` and
+`Report[[]2026[]]` for `Report[2026]`.
 
 SQL Server, every database, one table:
 
@@ -161,14 +173,60 @@ These are startup errors:
 ```yaml
 pii:
   rules:
-    - database: "*"
-      table: "Users*"          # wildcards only in database
-      columns: [Email]
+    - database: shop*
+      table: customers          # database is exact or the whole "*"
+      columns: [email]
     - database: shop
       schema: dbo              # invalid for mysql and mariadb
       table: customers
       columns: [email, EMAIL]  # duplicate column
 ```
+
+### Shared PII rule sets
+
+Top-level `pii_rules` is optional. If present, it is a non-empty sequence of strict groups with a
+non-empty `rules` list. A group without `name` is the one unnamed default; at most one may exist,
+and its rules apply to every `pii_safe` alias. A named group is inactive until an alias lists its
+exact, case-sensitive name in `pii.include`. Unused named groups are allowed.
+
+`include` must be a YAML sequence, not a comma-separated string. Unknown names and repeated names
+are startup errors. The effective list is deterministic: unnamed default rules first, named groups
+in the order written in `include`, then local `pii.rules`. Rules are a union: they are neither
+overridden nor deduplicated. The loader flattens this list before the server starts, so MCP tools,
+tokens, and SQL policy do not expose shared-set concepts.
+
+```yaml
+pii_rules:
+  - rules: # optional unnamed default: every pii_safe alias receives this rule
+      - database: "*"
+        table: "Audit*"
+        columns: [IpAddress]
+  - name: users_pii
+    rules:
+      - database: "*"
+        schema: dbo
+        table: "Users[0-9]?"
+        columns: [Email, Phone]
+
+servers:
+  app:
+    engine: sqlserver
+    access_level: pii_safe
+    connection_url: "${APP_SQL_URL}"
+    pii_key_env: APP_PII_KEY
+    pii:
+      include: [users_pii]
+      rules: # local rules follow default and included rules
+        - database: Billing
+          table: Cards
+          columns: [HolderName]
+```
+
+A `pii_safe` alias may omit `pii` only when the unnamed default yields at least one rule. The
+legacy local-only `pii.rules` form remains valid. Engine restrictions are checked after resolution:
+a shared rule with `schema` may be used by SQL Server but makes a MySQL/MariaDB alias that includes
+it invalid. A global rule set alone never changes a `metadata` alias; metadata aliases still cannot
+configure `pii_key_env`, `pii.include`, or `pii.rules`.
 
 ## Runtime limits
 

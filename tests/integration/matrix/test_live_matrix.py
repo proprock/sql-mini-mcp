@@ -7,16 +7,19 @@ single-engine gates.
 from __future__ import annotations
 
 import asyncio
+import base64
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 from live_support import LiveDatabase, live_database
 from mcp import Client
 from mcp_types import TextContent
 from mysql_support import LiveMySql, live_mariadb_only, live_mysql_only
 
-from sql_safe_mcp.config import AppConfig, RuntimeConfig
+from sql_safe_mcp.config import AppConfig, RuntimeConfig, load_config
 from sql_safe_mcp.mcp_server import create_server
 from sql_safe_mcp.security.tokens import TokenCodec
 
@@ -203,5 +206,133 @@ def test_same_public_contract_and_token_isolation_on_three_engines(
                         assert "INVALID_PII_TOKEN" in _text(bad)
                         failures.add(_text(bad))
             assert len(failures) == 1, failures
+
+    asyncio.run(scenario())
+
+
+def test_live_shared_pii_rules_apply_only_after_config_resolution(
+    live_database: LiveDatabase,
+    live_mysql_only: LiveMySql,
+    live_mariadb_only: LiveMySql,
+    tmp_path: Path,
+) -> None:
+    """A real MCP client observes flattened glob rules on every supported engine."""
+
+    def url(config: AppConfig, alias: str) -> str:
+        return config.servers[alias].connection_url.get_secret_value()
+
+    path = tmp_path / "shared-pii.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "version": 1,
+                "pii_rules": [
+                    {"rules": [{"database": "*", "table": "User?", "columns": ["Email"]}]},
+                    {
+                        "name": "mysql_people",
+                        "rules": [{"database": "*", "table": "peopl?", "columns": ["email"]}],
+                    },
+                    {
+                        "name": "not_included",
+                        "rules": [{"database": "*", "table": "Audit*", "columns": ["IpAddress"]}],
+                    },
+                ],
+                "servers": {
+                    "mssql_meta": {
+                        "engine": "sqlserver",
+                        "connection_url": url(live_database.config, "legacy"),
+                    },
+                    "mssql": {
+                        "engine": "sqlserver",
+                        "access_level": "pii_safe",
+                        "connection_url": url(live_database.config, "secure"),
+                        "pii_key_env": "MATRIX_MSSQL_KEY",
+                    },
+                    **{
+                        alias: {
+                            "engine": live.engine,
+                            "access_level": "pii_safe",
+                            "connection_url": url(live.sql_config, "secure"),
+                            "pii_key_env": key_name,
+                            "pii": {
+                                "include": ["mysql_people"],
+                                "rules": [
+                                    {
+                                        "database": "*",
+                                        "table": "Nothing?",
+                                        "columns": ["value"],
+                                    }
+                                ],
+                            },
+                        }
+                        for alias, live, key_name in (
+                            ("mysql", live_mysql_only, "MATRIX_MYSQL_KEY"),
+                            ("maria", live_mariadb_only, "MATRIX_MARIA_KEY"),
+                        )
+                    },
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    config = load_config(
+        path,
+        {
+            "MATRIX_MSSQL_KEY": base64.b64encode(live_database.pii_key).decode(),
+            "MATRIX_MYSQL_KEY": base64.b64encode(live_mysql_only.key).decode(),
+            "MATRIX_MARIA_KEY": base64.b64encode(live_mariadb_only.key).decode(),
+        },
+    )
+    mssql_pii = config.servers["mssql"].pii
+    mysql_pii = config.servers["mysql"].pii
+    assert mssql_pii is not None
+    assert mysql_pii is not None
+    assert [rule.table for rule in mssql_pii.rules] == ["User?"]
+    assert [rule.table for rule in mysql_pii.rules] == [
+        "User?",
+        "peopl?",
+        "Nothing?",
+    ]
+
+    async def scenario() -> None:
+        async with Client(create_server(config), raise_exceptions=True) as client:
+            mssql_token = TokenCodec("mssql", live_database.pii_key).encrypt(
+                live_database.emails[0]
+            )
+            mssql = await client.call_tool(
+                "execute_sql",
+                {
+                    "server": "mssql",
+                    "database": live_database.database,
+                    "sql": (
+                        f"SELECT Id FROM [{live_database.alpha_schema}].[Users] "
+                        f"WHERE Email = '{mssql_token}'"
+                    ),
+                },
+            )
+            assert mssql.is_error is False, _text(mssql)
+            for alias, live in (("mysql", live_mysql_only), ("maria", live_mariadb_only)):
+                token = TokenCodec(alias, live.key).encrypt("a@example.com")
+                result = await client.call_tool(
+                    "execute_sql",
+                    {
+                        "server": alias,
+                        "database": live.sql_database,
+                        "sql": f"SELECT id FROM people WHERE email = '{token}'",
+                    },
+                )
+                assert result.is_error is False, _text(result)
+
+            denied = await client.call_tool(
+                "execute_sql",
+                {
+                    "server": "mssql_meta",
+                    "database": live_database.database,
+                    "sql": "SELECT Id FROM Users",
+                },
+            )
+            assert denied.is_error is True
+            assert "ACCESS_LEVEL_DENIED" in _text(denied)
 
     asyncio.run(scenario())

@@ -90,6 +90,356 @@ servers:
     assert _key(1) not in repr(config)
 
 
+def test_resolves_default_named_and_local_pii_rules_in_stable_order(tmp_path: Path) -> None:
+    path = _write(
+        tmp_path,
+        """
+version: 1
+pii_rules:
+  - rules:
+      - database: "*"
+        table: Audit*
+        columns: [IpAddress]
+  - name: users_pii
+    rules:
+      - database: "*"
+        schema: dbo
+        table: Users[0-9]?
+        columns: [Email, Phone]
+servers:
+  default_only:
+    engine: sqlserver
+    access_level: pii_safe
+    connection_url: ${DEFAULT_URL}
+    pii_key_env: DEFAULT_KEY
+  named_and_local:
+    engine: sqlserver
+    access_level: pii_safe
+    connection_url: ${NAMED_URL}
+    pii_key_env: NAMED_KEY
+    pii:
+      include: [users_pii]
+      rules:
+        - database: Billing
+          table: Cards
+          columns: [HolderName]
+        - database: "*"
+          table: Audit*
+          columns: [IpAddress]
+""",
+    )
+    config = load_config(
+        path,
+        {
+            "DEFAULT_URL": "mssql+pyodbc://u:p@default/master?driver=x",
+            "NAMED_URL": "mssql+pyodbc://u:p@named/master?driver=x",
+            "DEFAULT_KEY": _key(4),
+            "NAMED_KEY": _key(5),
+        },
+    )
+
+    default_only = config.servers["default_only"].pii
+    assert default_only is not None
+    assert [rule.table for rule in default_only.rules] == ["Audit*"]
+    named_and_local = config.servers["named_and_local"].pii
+    assert named_and_local is not None
+    assert [rule.table for rule in named_and_local.rules] == [
+        "Audit*",
+        "Users[0-9]?",
+        "Cards",
+        "Audit*",
+    ]
+    assert not hasattr(named_and_local, "include")
+
+
+@pytest.mark.parametrize(
+    ("pii_rules", "pii", "message"),
+    [
+        (
+            """
+  - name: shared
+    rules: [{database: "*", table: Users, columns: [Email]}]
+""",
+            "    pii: {include: [missing]}\n",
+            "unknown pii rule set 'missing'",
+        ),
+        (
+            """
+  - rules: [{database: "*", table: Users, columns: [Email]}]
+  - rules: [{database: "*", table: Contacts, columns: [Email]}]
+""",
+            "",
+            "at most one unnamed pii rule set",
+        ),
+        (
+            """
+  - name: shared
+    rules: [{database: "*", table: Users, columns: [Email]}]
+""",
+            "    pii: {include: shared}\n",
+            "Input should be a valid list",
+        ),
+    ],
+)
+def test_rejects_invalid_shared_pii_rule_references(
+    tmp_path: Path, pii_rules: str, pii: str, message: str
+) -> None:
+    path = _write(
+        tmp_path,
+        """
+version: 1
+pii_rules:
+"""
+        + pii_rules
+        + """
+servers:
+  app:
+    engine: sqlserver
+    access_level: pii_safe
+    connection_url: ${URL}
+    pii_key_env: KEY
+"""
+        + pii,
+    )
+
+    with pytest.raises(DomainError, match=message):
+        load_config(
+            path,
+            {"URL": "mssql+pyodbc://u:p@app/master?driver=x", "KEY": _key(6)},
+        )
+
+
+def test_duplicate_unnamed_rule_sets_have_a_stable_error(tmp_path: Path) -> None:
+    path = _write(
+        tmp_path,
+        """
+version: 1
+pii_rules:
+  - rules: [{database: "*", table: Users, columns: [Email]}]
+  - rules: [{database: "*", table: Contacts, columns: [Email]}]
+servers:
+  app:
+    engine: sqlserver
+    access_level: pii_safe
+    connection_url: ${URL}
+    pii_key_env: KEY
+""",
+    )
+
+    with pytest.raises(DomainError) as raised:
+        load_config(path, {"URL": "mssql+pyodbc://u:p@app/master?driver=x", "KEY": _key(6)})
+
+    assert raised.value.public_message == (
+        "Invalid configuration: at most one unnamed pii rule set is allowed"
+    )
+
+
+def test_named_rule_sets_are_not_implicit_and_local_only_shape_stays_valid(tmp_path: Path) -> None:
+    path = _write(
+        tmp_path,
+        """
+version: 1
+pii_rules:
+  - name: not_included
+    rules: [{database: "*", table: Users, columns: [Email]}]
+servers:
+  app:
+    engine: sqlserver
+    access_level: pii_safe
+    connection_url: ${URL}
+    pii_key_env: KEY
+    pii:
+      rules: [{database: "*", table: Cards, columns: [HolderName]}]
+""",
+    )
+
+    config = load_config(
+        path,
+        {"URL": "mssql+pyodbc://u:p@app/master?driver=x", "KEY": _key(7)},
+    )
+
+    app_pii = config.servers["app"].pii
+    assert app_pii is not None
+    assert [rule.table for rule in app_pii.rules] == ["Cards"]
+
+
+def test_named_rule_sets_are_case_sensitive_and_may_differ_only_by_case(tmp_path: Path) -> None:
+    path = _write(
+        tmp_path,
+        """
+version: 1
+pii_rules:
+  - name: Users
+    rules: [{database: "*", table: Users, columns: [Email]}]
+  - name: users
+    rules: [{database: "*", table: Contacts, columns: [Email]}]
+servers:
+  app:
+    engine: sqlserver
+    access_level: pii_safe
+    connection_url: ${URL}
+    pii_key_env: KEY
+    pii: {include: [Users]}
+""",
+    )
+
+    config = load_config(
+        path,
+        {"URL": "mssql+pyodbc://u:p@app/master?driver=x", "KEY": _key(7)},
+    )
+
+    pii = config.servers["app"].pii
+    assert pii is not None
+    assert [rule.table for rule in pii.rules] == ["Users"]
+
+
+@pytest.mark.parametrize("engine", ["mysql", "mariadb"])
+def test_shared_rules_check_schema_after_resolution_for_mysql_family(
+    tmp_path: Path, engine: str
+) -> None:
+    template = """
+version: 1
+pii_rules:
+  - name: sqlserver_only
+    rules: [{{database: "*", schema: dbo, table: Users, columns: [Email]}}]
+servers:
+  app:
+    engine: {engine}
+    access_level: pii_safe
+    connection_url: mysql+pymysql://u:p@app/database
+    pii_key_env: KEY
+    pii: {pii}
+    """
+    env = {"KEY": _key(8)}
+
+    unused_path = _write(
+        tmp_path,
+        template.format(
+            engine=engine,
+            pii="{rules: [{database: '*', table: Users, columns: [Email]}]}",
+        ),
+    )
+    assert load_config(unused_path, env).servers["app"].engine == engine
+
+    included_path = _write(
+        tmp_path,
+        template.format(engine=engine, pii="{include: [sqlserver_only]}"),
+    )
+    with pytest.raises(DomainError, match="cannot set schema"):
+        load_config(included_path, env)
+
+
+@pytest.mark.parametrize(
+    ("pii_rules", "pii", "message"),
+    [
+        (
+            """
+  - name: duplicate
+    rules: [{database: "*", table: Users, columns: [Email]}]
+  - name: duplicate
+    rules: [{database: "*", table: Contacts, columns: [Email]}]
+""",
+            "{include: [duplicate]}",
+            "duplicate pii rule set name 'duplicate'",
+        ),
+        (
+            """
+  - name: shared
+    rules: [{database: "*", table: Users, columns: [Email]}]
+""",
+            "{include: [shared, shared]}",
+            "more than once",
+        ),
+        ("", "{include: []}", "pii_safe servers require pii_key_env and pii rules"),
+    ],
+)
+def test_shared_rule_resolution_rejects_ambiguous_or_empty_effective_rules(
+    tmp_path: Path, pii_rules: str, pii: str, message: str
+) -> None:
+    path = _write(
+        tmp_path,
+        """
+version: 1
+"""
+        + ("pii_rules:\n" + pii_rules if pii_rules else "")
+        + """
+servers:
+  app:
+    engine: sqlserver
+    access_level: pii_safe
+    connection_url: ${URL}
+    pii_key_env: KEY
+    pii: """
+        + pii
+        + "\n",
+    )
+
+    with pytest.raises(DomainError, match=message):
+        load_config(path, {"URL": "mssql+pyodbc://u:p@app/master?driver=x", "KEY": _key(9)})
+
+
+def test_default_rules_skip_metadata_and_resolution_continues_to_later_aliases(
+    tmp_path: Path,
+) -> None:
+    path = _write(
+        tmp_path,
+        """
+version: 1
+pii_rules:
+  - rules: [{database: "*", table: Users, columns: [Email]}]
+servers:
+  metadata:
+    engine: sqlserver
+    connection_url: ${META_URL}
+  app:
+    engine: sqlserver
+    access_level: pii_safe
+    connection_url: ${APP_URL}
+    pii_key_env: KEY
+""",
+    )
+
+    config = load_config(
+        path,
+        {
+            "META_URL": "mssql+pyodbc://u:p@meta/master?driver=x",
+            "APP_URL": "mssql+pyodbc://u:p@app/master?driver=x",
+            "KEY": _key(10),
+        },
+    )
+
+    assert config.servers["metadata"].pii is None
+    app_pii = config.servers["app"].pii
+    assert app_pii is not None
+    assert [rule.table for rule in app_pii.rules] == ["Users"]
+
+
+def test_metadata_alias_rejects_shared_rule_configuration_with_a_stable_error(
+    tmp_path: Path,
+) -> None:
+    path = _write(
+        tmp_path,
+        """
+version: 1
+pii_rules:
+  - name: shared
+    rules: [{database: "*", table: Users, columns: [Email]}]
+servers:
+  metadata:
+    engine: sqlserver
+    connection_url: ${URL}
+    pii: {include: [shared]}
+""",
+    )
+
+    with pytest.raises(DomainError) as raised:
+        load_config(path, {"URL": "mssql+pyodbc://u:p@meta/master?driver=x"})
+
+    assert raised.value.public_message == (
+        "Invalid configuration: metadata servers cannot configure pii_key_env or pii rules"
+    )
+
+
 def test_rejects_reused_key_across_server_aliases(tmp_path: Path) -> None:
     path = _write(
         tmp_path,

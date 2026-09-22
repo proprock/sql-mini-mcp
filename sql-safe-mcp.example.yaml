@@ -13,6 +13,18 @@ runtime:
   default_max_rows: 200
   hard_max_rows: 1000
 
+pii_rules:
+  - rules: # optional unnamed default: every pii_safe alias receives this rule
+      - database: "*"
+        table: "Audit*"
+        columns: [IpAddress]
+  - name: users_pii
+    rules:
+      - database: "*"
+        schema: dbo
+        table: "Users[0-9]?"
+        columns: [Email, FirstName, LastName]
+
 servers:
   legacy-prod:
     engine: sqlserver
@@ -23,11 +35,12 @@ servers:
       ?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes
     pii_key_env: LEGACY_PROD_PII_KEY
     pii:
+      include: [users_pii]
       rules:
-        - database: "*"
+        - database: Billing
           schema: dbo
-          table: Users
-          columns: [Email, FirstName, LastName]
+          table: Cards
+          columns: [HolderName]
 
   reporting-metadata:
     engine: sqlserver
