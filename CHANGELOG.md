@@ -7,6 +7,8 @@ categories `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, and `Security`.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-22
+
 ### Added
 
 - `sql-safe-mcp --gen-pii-key [N]` generates one base64-encoded 32-byte PII key by default, or
