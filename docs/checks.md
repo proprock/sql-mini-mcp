@@ -1,8 +1,17 @@
 # Checks
 
-Fast checks:
+On Linux and macOS, use GNU Make as the primary development interface. It requires GNU Make,
+Bash, `uv`, and (for database targets) Docker Compose and OpenSSL:
 
-```powershell
+```bash
+make sync
+make check
+```
+
+`make help` lists every available target. The direct commands remain useful for diagnosing a
+specific failure:
+
+```bash
 uv sync --all-groups --locked
 uv run ruff format --check .
 uv run ruff check .
@@ -12,7 +21,11 @@ uv run pytest tests/unit tests/contract -q
 
 Install the existing commit hooks once after syncing dependencies, then run them before a commit:
 
-```powershell
+```bash
+make hooks-install
+make hooks
+
+# Direct equivalents
 uv run prek install
 uv run prek run --all-files
 ```
@@ -22,7 +35,10 @@ test suite.
 
 For a behavior-changing implementation phase, review statement and branch coverage separately:
 
-```powershell
+```bash
+make coverage
+
+# Direct equivalent
 uv run pytest tests/unit tests/contract --cov=sql_safe_mcp --cov-branch --cov-report=term-missing
 ```
 
@@ -36,7 +52,10 @@ they remain an explicit local or externally managed disposable-database gate.
 
 Validate the example configuration after defining its documented environment variables:
 
-```powershell
+```bash
+make config-check CONFIG=sql-safe-mcp.example-simple.yaml
+
+# Direct equivalent
 uv run sql-safe-mcp --config sql-safe-mcp.example-simple.yaml --check-config
 ```
 
@@ -60,7 +79,15 @@ The normal Windows live gate starts or reuses the digest-pinned SQL Server 2022 
 it running between checks. Test SQL objects and credentials are uniquely named and cleaned after
 each run:
 
+```bash
+make test-sqlserver
+
+# Direct Linux/macOS script
+./scripts/test-sqlserver
+```
+
 ```powershell
+# Windows equivalent
 .\scripts\test-sqlserver.ps1
 ```
 
@@ -77,7 +104,15 @@ and cleans its uniquely named databases and logins; changes to `MySqlExtras`, My
 PyMySQL connection handling require it, and the milestone live gate requires it in addition to the
 SQL Server run:
 
+```bash
+make test-mysql
+
+# Direct Linux/macOS script
+./scripts/test-mysql
+```
+
 ```powershell
+# Windows equivalent
 .\scripts\test-mysql.ps1
 ```
 
@@ -88,27 +123,53 @@ and per-alias token isolation.
 
 Externally managed servers use `SQL_SAFE_MCP_TEST_MYSQL_URL` and
 `SQL_SAFE_MCP_TEST_MARIADB_URL` with `uv run pytest tests/integration/mysql -m integration`.
-`.\scripts\test-mysql.ps1 -Reset` removes the containers and volumes.
+`make db-down-mysql`, `./scripts/test-mysql --reset`, or `.\scripts\test-mysql.ps1 -Reset`
+removes the containers and volumes.
 
 The release matrix starts (or reuses) all three containers, sets all three URLs, and runs every
 live suite plus the cross-engine test (same public contract on the three engines, tokens of one
 alias refused by the others with one identical `INVALID_PII_TOKEN`). It is part of the milestone
 live gate and is never run by the single-engine scripts:
 
+```bash
+make test-matrix
+
+# Direct Linux/macOS script
+./scripts/test-matrix
+```
+
 ```powershell
+# Windows equivalent
 .\scripts\test-matrix.ps1
 ```
 
-Explicit local Docker cleanup is separate from the gate and removes the test container and volume:
+Explicit local Docker cleanup is separate from the gate and removes test containers and volumes:
+
+```bash
+make db-down
+make db-down-sqlserver
+make db-down-mysql
+
+# Direct Linux/macOS script
+./scripts/test-sqlserver --reset
+```
 
 ```powershell
+# Windows equivalent
 .\scripts\test-sqlserver.ps1 -Reset
 ```
+
+`make db-up`, `make db-status`, and `make db-logs` manage or inspect the disposable containers
+without running tests. `make demo-seed` fills the running SQL Server container with the synthetic
+demo databases; use `DEMO_ARGS="--reset"` to recreate them.
 
 The security suite lives in `tests/security` and runs with the fast suite. Add it explicitly when
 running a subset:
 
-```powershell
+```bash
+make security
+
+# Direct equivalent
 uv run pytest tests/unit tests/contract tests/security -q
 ```
 
@@ -120,7 +181,11 @@ deterministic `security-fast` profile (about 200 examples per property).
 
 Run before a milestone that changes `execute_sql` is closed:
 
-```powershell
+```bash
+make security
+make security-deep
+
+# Direct equivalents
 uv run pytest tests/unit tests/contract tests/security -m "not deep"
 uv run pytest tests/security -m deep
 ```
@@ -133,8 +198,8 @@ Mutation testing runs on Linux or WSL only, in a clone on the Linux filesystem (
 
 ```bash
 git clone <repo> ~/smm-mut && cd ~/smm-mut
-uv sync --all-groups --locked
-HYPOTHESIS_PROFILE=security-mutation uv run mutmut run
+make sync
+make mutation
 uv run mutmut results
 uv run mutmut show <mutant>
 ```

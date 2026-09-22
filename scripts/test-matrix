@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+reset=false
+pytest_args=()
+
+for argument in "$@"; do
+    case "$argument" in
+        --reset|-Reset)
+            reset=true
+            ;;
+        *)
+            pytest_args+=("$argument")
+            ;;
+    esac
+done
+
+require_docker() {
+    if ! docker info >/dev/null 2>&1; then
+        echo "Docker daemon is not ready. Start Docker and retry." >&2
+        exit 1
+    fi
+}
+
+random_suffix() {
+    command -v openssl >/dev/null || {
+        echo "openssl is required to generate a test password." >&2
+        exit 1
+    }
+    openssl rand -hex 16
+}
+
+container_password() {
+    local compose_file="$1"
+    local service="$2"
+    local variable="$3"
+    local container_id
+    local password_entry
+
+    container_id="$(docker compose -f "$compose_file" ps -aq "$service")"
+    if [[ -z "$container_id" ]]; then
+        return 0
+    fi
+
+    password_entry="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container_id" | \
+        awk -v prefix="${variable}=" '$0 ~ "^" prefix {print; exit}')"
+    if [[ -z "$password_entry" ]]; then
+        echo "The existing ${service} container has no configured ${variable}." >&2
+        return 1
+    fi
+    printf '%s' "${password_entry#*=}"
+}
+
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+sqlserver_compose="${script_dir}/../compose.sqlserver.yml"
+mysql_compose="${script_dir}/../compose.mysql.yml"
+
+require_docker
+export SQL_SAFE_MCP_DOCKER_SA_PASSWORD="${SQL_SAFE_MCP_DOCKER_SA_PASSWORD:-inspect}"
+export SQL_SAFE_MCP_DOCKER_ROOT_PASSWORD="${SQL_SAFE_MCP_DOCKER_ROOT_PASSWORD:-inspect}"
+
+if "$reset"; then
+    docker compose -f "$sqlserver_compose" down --volumes --remove-orphans
+    docker compose -f "$mysql_compose" down --volumes --remove-orphans
+    exit 0
+fi
+
+sa_password="$(container_password "$sqlserver_compose" sqlserver MSSQL_SA_PASSWORD)"
+if [[ -z "$sa_password" ]]; then
+    sa_password="SqlSafeMcp!A1$(random_suffix)"
+fi
+root_password="$(container_password "$mysql_compose" mysql MYSQL_ROOT_PASSWORD)"
+if [[ -z "$root_password" ]]; then
+    root_password="SqlSafeMcp$(random_suffix)"
+fi
+
+export SQL_SAFE_MCP_DOCKER_SA_PASSWORD="$sa_password"
+export SQL_SAFE_MCP_DOCKER_ROOT_PASSWORD="$root_password"
+cleanup() {
+    unset SQL_SAFE_MCP_TEST_SQLSERVER_URL SQL_SAFE_MCP_TEST_MYSQL_URL SQL_SAFE_MCP_TEST_MARIADB_URL \
+        SQL_SAFE_MCP_AUDIT_DIR SQL_SAFE_MCP_DOCKER_SA_PASSWORD SQL_SAFE_MCP_DOCKER_ROOT_PASSWORD
+}
+trap cleanup EXIT
+
+docker compose -f "$sqlserver_compose" up -d --wait
+docker compose -f "$mysql_compose" up -d --wait
+
+sqlserver_port_line="$(docker compose -f "$sqlserver_compose" port sqlserver 1433)"
+if [[ -z "$sqlserver_port_line" ]]; then
+    echo "Could not determine the SQL Server host port." >&2
+    exit 1
+fi
+sqlserver_port="${sqlserver_port_line##*:}"
+encoded_sa_password="$(uv run python -c 'import sys; from urllib.parse import quote; print(quote(sys.argv[1], safe=""))' "$sa_password")"
+export SQL_SAFE_MCP_TEST_SQLSERVER_URL="mssql+pyodbc://sa:${encoded_sa_password}@127.0.0.1:${sqlserver_port}/master?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=yes"
+
+encoded_root_password="$(uv run python -c 'import sys; from urllib.parse import quote; print(quote(sys.argv[1], safe=""))' "$root_password")"
+for service in mysql mariadb; do
+    port_line="$(docker compose -f "$mysql_compose" port "$service" 3306)"
+    if [[ -z "$port_line" ]]; then
+        echo "Could not determine the ${service} host port." >&2
+        exit 1
+    fi
+    port="${port_line##*:}"
+    if [[ "$service" == "mysql" ]]; then
+        export SQL_SAFE_MCP_TEST_MYSQL_URL="mysql+pymysql://root:${encoded_root_password}@127.0.0.1:${port}/mysql"
+    else
+        export SQL_SAFE_MCP_TEST_MARIADB_URL="mysql+pymysql://root:${encoded_root_password}@127.0.0.1:${port}/mysql"
+    fi
+done
+
+audit_dir="${TMPDIR:-/tmp}/sql-safe-mcp-audit"
+rm -rf "$audit_dir"
+export SQL_SAFE_MCP_AUDIT_DIR="$audit_dir"
+
+set +e
+uv run pytest tests/integration -m integration -v "${pytest_args[@]}"
+exit_code=$?
+set -e
+
+if [[ -d "$audit_dir" ]]; then
+    echo "Audit artifacts: $audit_dir"
+fi
+
+exit "$exit_code"

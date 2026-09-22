@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+container=""
+reader_password=""
+reset=false
+
+usage() {
+    echo "Usage: scripts/seed-data --container <container-id> [--reader-password <password>] [--reset]" >&2
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --container)
+            [[ $# -ge 2 ]] || { usage; exit 2; }
+            container="$2"
+            shift 2
+            ;;
+        --reader-password)
+            [[ $# -ge 2 ]] || { usage; exit 2; }
+            reader_password="$2"
+            shift 2
+            ;;
+        --reset|-Reset)
+            reset=true
+            shift
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            usage
+            exit 2
+            ;;
+    esac
+done
+
+[[ -n "$container" ]] || { usage; exit 2; }
+
+if ! docker info >/dev/null 2>&1; then
+    echo "Docker daemon is not ready. Start Docker and retry." >&2
+    exit 1
+fi
+
+if [[ "$(docker inspect --format '{{.State.Running}}' "$container")" != "true" ]]; then
+    echo "Container '$container' is not running." >&2
+    exit 1
+fi
+
+if [[ -z "$reader_password" ]]; then
+    command -v openssl >/dev/null || {
+        echo "openssl is required to generate a reader password." >&2
+        exit 1
+    }
+    reader_password="McpReader!$(openssl rand -hex 16)"
+    generated_password=true
+else
+    generated_password=false
+fi
+
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+seed_file="${script_dir}/seed-demo.sql"
+remote_file="/tmp/seed-demo.sql"
+sqlcmd='/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -b'
+
+if "$reset"; then
+    drop_query="DROP DATABASE IF EXISTS shop_demo; DROP DATABASE IF EXISTS hr_demo; DROP DATABASE IF EXISTS blog_demo; IF SUSER_ID('mcp_reader') IS NOT NULL DROP LOGIN mcp_reader;"
+    docker exec "$container" sh -c "$sqlcmd -Q \"$drop_query\""
+fi
+
+docker cp "$seed_file" "${container}:${remote_file}"
+docker exec -e "MCP_READER_PASSWORD=$reader_password" "$container" \
+    sh -c "$sqlcmd -v MCP_READER_PASSWORD=\"\$MCP_READER_PASSWORD\" -i $remote_file"
+docker exec -u 0 "$container" rm -f "$remote_file" >/dev/null
+
+port_line="$(docker port "$container" 1433 | head -n 1)"
+port="${port_line##*:}"
+echo "Seeded shop_demo, hr_demo, blog_demo. Login: mcp_reader (read-only), host port: ${port:-<port>}."
+if "$generated_password"; then
+    echo "Generated reader password: $reader_password"
+else
+    echo "Reader password: the value passed in --reader-password."
+fi

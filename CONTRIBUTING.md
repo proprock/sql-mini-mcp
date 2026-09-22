@@ -21,14 +21,19 @@ them and links the detail documents.
 
 ## Setup
 
-Requires Python 3.12+, [uv](https://docs.astral.sh/uv/), and Microsoft ODBC Driver 18 for SQL Server
-for the live tests.
+Requires Python 3.12+, [uv](https://docs.astral.sh/uv/), GNU Make, and Bash. Docker Compose and
+OpenSSL are required for disposable database targets; Microsoft ODBC Driver 18 is also required
+for the SQL Server live tests.
 
 ```bash
 git clone https://github.com/proprock/sql-safe-mcp
 cd sql-safe-mcp
-uv sync --all-groups --locked
+make sync
 ```
+
+Run `make help` to list the development interface. PowerShell scripts remain available under
+`scripts/*.ps1` for Windows; Linux/macOS use the same-named executable Bash scripts without the
+`.ps1` extension.
 
 ### Commit hooks
 
@@ -37,23 +42,20 @@ uv sync --all-groups --locked
 config. It is a dev dependency, so `uv sync` already installed it:
 
 ```bash
-uv run prek install
+make hooks-install
 ```
 
-Run everything on demand with `uv run prek run --all-files`. Never bypass a failing hook with
+Run everything on demand with `make hooks`. Never bypass a failing hook with
 `--no-verify`; fix the failure. The full test suite is not a hook.
 
 ## Checks
 
 ```bash
-uv run ruff format --check .
-uv run ruff check .
-uv run ty check
-uv run pytest tests/unit tests/contract -q
-uv run pytest tests/unit tests/contract --cov=sql_safe_mcp --cov-branch --cov-report=term-missing
+make check
+make coverage
 ```
 
-`uv run ruff format .` applies formatting. The last command reports statement and branch coverage
+`make format` applies formatting. The last command reports statement and branch coverage
 with missing lines; review it before closing a change. Coverage never replaces behavioral
 assertions. The complete list of gates is in [checks.md](docs/checks.md).
 
@@ -72,8 +74,8 @@ test first, then the minimal implementation.
 Docker-backed SQL Server tests never run in hosted CI. Run them locally against the digest-pinned
 SQL Server 2022 container, which needs Docker Desktop in Linux-container mode:
 
-```powershell
-.\scripts\test-sqlserver.ps1
+```bash
+make test-sqlserver
 ```
 
 Each run creates uniquely named objects and removes them afterwards; `-Reset` also removes the
@@ -84,10 +86,14 @@ Details are in [checks.md](docs/checks.md).
 MySQL and MariaDB have their own digest-pinned containers and script, and the release matrix runs
 all three engines together:
 
-```powershell
-.\scripts\test-mysql.ps1
-.\scripts\test-matrix.ps1
+```bash
+make test-mysql
+make test-matrix
 ```
+
+Use `make db-up`, `make db-status`, `make db-logs`, and the explicit cleanup target `make db-down`
+when you need to manage the disposable containers without running tests. `make demo-seed` adds the
+synthetic SQL Server demo databases to a running SQL Server container.
 
 ## Architecture
 

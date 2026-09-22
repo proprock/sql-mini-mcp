@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+reset=false
+pytest_args=()
+
+for argument in "$@"; do
+    case "$argument" in
+        --reset|-Reset)
+            reset=true
+            ;;
+        *)
+            pytest_args+=("$argument")
+            ;;
+    esac
+done
+
+require_docker() {
+    if ! docker info >/dev/null 2>&1; then
+        echo "Docker daemon is not ready. Start Docker and retry." >&2
+        exit 1
+    fi
+}
+
+random_suffix() {
+    command -v openssl >/dev/null || {
+        echo "openssl is required to generate a test password." >&2
+        exit 1
+    }
+    openssl rand -hex 16
+}
+
+compose_file="$(cd "$(dirname "$0")/.." && pwd)/compose.mysql.yml"
+
+require_docker
+export SQL_SAFE_MCP_DOCKER_ROOT_PASSWORD="${SQL_SAFE_MCP_DOCKER_ROOT_PASSWORD:-inspect}"
+
+if "$reset"; then
+    docker compose -f "$compose_file" down --volumes --remove-orphans
+    exit $?
+fi
+
+container_id="$(docker compose -f "$compose_file" ps -aq mysql)"
+if [[ -n "$container_id" ]]; then
+    password_entry="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container_id" | \
+        awk '/^MYSQL_ROOT_PASSWORD=/{print; exit}')"
+    if [[ -z "$password_entry" ]]; then
+        echo "The existing MySQL container has no configured root password." >&2
+        exit 1
+    fi
+    password="${password_entry#MYSQL_ROOT_PASSWORD=}"
+else
+    password="SqlSafeMcp$(random_suffix)"
+fi
+
+export SQL_SAFE_MCP_DOCKER_ROOT_PASSWORD="$password"
+cleanup() {
+    unset SQL_SAFE_MCP_TEST_MYSQL_URL SQL_SAFE_MCP_TEST_MARIADB_URL SQL_SAFE_MCP_DOCKER_ROOT_PASSWORD
+}
+trap cleanup EXIT
+
+docker compose -f "$compose_file" up -d --wait
+
+encoded_password="$(uv run python -c 'import sys; from urllib.parse import quote; print(quote(sys.argv[1], safe=""))' "$password")"
+for service in mysql mariadb; do
+    port_line="$(docker compose -f "$compose_file" port "$service" 3306)"
+    if [[ -z "$port_line" ]]; then
+        echo "Could not determine the ${service} host port." >&2
+        exit 1
+    fi
+    port="${port_line##*:}"
+    if [[ "$service" == "mysql" ]]; then
+        export SQL_SAFE_MCP_TEST_MYSQL_URL="mysql+pymysql://root:${encoded_password}@127.0.0.1:${port}/mysql"
+    else
+        export SQL_SAFE_MCP_TEST_MARIADB_URL="mysql+pymysql://root:${encoded_password}@127.0.0.1:${port}/mysql"
+    fi
+done
+
+uv run pytest tests/integration/mysql -m integration -v "${pytest_args[@]}"
