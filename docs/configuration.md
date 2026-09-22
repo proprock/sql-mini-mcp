@@ -69,25 +69,18 @@ connection_url: "mssql+pyodbc://${DEV_SQL_USER}:${DEV_SQL_PASSWORD}@${DEV_SQL_HO
 `pii_safe` enables `execute_sql` for a server alias. Such an alias requires its own base64-encoded 32-byte key in the variable named by `pii_key_env`,
 plus `pii.rules` listing the protected columns:
 
-```powershell
-$bytes = New-Object byte[] 32
-$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-try {
-    $rng.GetBytes($bytes)
-} finally {
-    $rng.Dispose()
-}
-$env:LEGACY_PROD_PII_KEY = [Convert]::ToBase64String($bytes)
+```
+sql-safe-mcp --gen-pii-key
 ```
 
-Example output (generate your own key; do not reuse this value):
+The command prints one key to stdout and exits without loading the configuration or connecting to a
+database. Store that value in the secret environment or configuration used by your MCP host under
+the variable named by `pii_key_env`; never put it in the YAML file. To generate a separate key for
+each of several aliases, pass a positive count. The command prints exactly that many keys, one per
+line:
 
-```text
-XdTYCuhE/m7zMoiVwlonk6L6Bjxt6R2uqoso3MMRKRc=
 ```
-
-```bash
-export LEGACY_PROD_PII_KEY="$(openssl rand -base64 32)"
+sql-safe-mcp --gen-pii-key 3
 ```
 
 A key reused by two aliases is rejected. Tokens authenticate the alias as associated data, so
