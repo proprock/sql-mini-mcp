@@ -103,6 +103,23 @@ else.
 
 Verified against SQL Server 2022, MySQL 8.4, and MariaDB 11.4 (see [CHECKS.md](CHECKS.md)).
 
+<details>
+<summary><b>Or you can even ask an agent to install it</b></summary>
+
+```text
+Install sql-safe-mcp as a stdio MCP server.
+Ask whether to install it for this project/workspace or at user level. Then:
+detect and preserve the host's existing MCP config;
+configure the server to run via uvx sql-safe-mcp;
+create a YAML config template with env placeholders only;
+add SQL_SAFE_MCP_CONFIG;
+report the env variables the user must set.
+Do not store secrets or connection data in tracked files or output. Validate with
+sql-safe-mcp --check-config once variables are available.
+```
+
+</details>
+
 ### Configure multiple servers
 
 Copy [sql-safe-mcp.example.yaml](sql-safe-mcp.example.yaml) to `sql-safe-mcp.yaml`. Add each
@@ -137,23 +154,6 @@ servers:
 Here `reporting`, `billing`, and `shop` are the values an agent passes as `server`. Their
 credentials and access policies are independent. A missing variable, or an `engine` that does not
 match the URL dialect, stops the MCP server at startup.
-
-### Ask an agent to install it
-
-Give a coding agent the following prompt when you want it to perform the setup in its own MCP
-host:
-
-```text
-Install and configure sql-safe-mcp as a stdio MCP server for this workspace. First inspect the
-host's existing MCP configuration convention and preserve all unrelated server entries. Create or
-update a non-secret YAML configuration using environment-variable placeholders only. Never put
-connection URLs, passwords, PII keys, tokens, bind values, or query results in tracked files, chat
-output, or logs. If the database aliases, engines, access levels, PII rules, configuration path,
-or secret-storage mechanism are not specified, ask me before choosing them. Configure the host to
-run `uvx sql-safe-mcp` with `SQL_SAFE_MCP_CONFIG` and the required variables supplied through the
-host's secret or environment mechanism. Run `sql-safe-mcp --check-config` after the variables are
-available, then report only the configured aliases and the validation result.
-```
 
 ### Check the configuration
 
