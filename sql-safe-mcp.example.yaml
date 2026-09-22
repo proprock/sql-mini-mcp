@@ -14,7 +14,7 @@ runtime:
   hard_max_rows: 1000
 
 pii_rules:
-  - rules: # unnamed default, applied to every pii_safe alias
+  - rules: # optional unnamed default: every pii_safe alias receives this rule
       - database: "*"
         table: "Audit*"
         columns: [IpAddress]

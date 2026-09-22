@@ -138,6 +138,23 @@ Here `reporting`, `billing`, and `shop` are the values an agent passes as `serve
 credentials and access policies are independent. A missing variable, or an `engine` that does not
 match the URL dialect, stops the MCP server at startup.
 
+### Ask an agent to install it
+
+Give a coding agent the following prompt when you want it to perform the setup in its own MCP
+host:
+
+```text
+Install and configure sql-safe-mcp as a stdio MCP server for this workspace. First inspect the
+host's existing MCP configuration convention and preserve all unrelated server entries. Create or
+update a non-secret YAML configuration using environment-variable placeholders only. Never put
+connection URLs, passwords, PII keys, tokens, bind values, or query results in tracked files, chat
+output, or logs. If the database aliases, engines, access levels, PII rules, configuration path,
+or secret-storage mechanism are not specified, ask me before choosing them. Configure the host to
+run `uvx sql-safe-mcp` with `SQL_SAFE_MCP_CONFIG` and the required variables supplied through the
+host's secret or environment mechanism. Run `sql-safe-mcp --check-config` after the variables are
+available, then report only the configured aliases and the validation result.
+```
+
 ### Check the configuration
 
 After defining every environment variable referenced by the YAML file, point the server at it with

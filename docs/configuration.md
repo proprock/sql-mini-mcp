@@ -110,6 +110,11 @@ the catalog: `database` is the MySQL database name and the rule has no `schema`.
 Migration note: an existing exact table name containing `?`, `[` or `]` is now interpreted as a
 glob. Use `[*]`, `[?]`, `[[]`, and `[]]` to match literal `*`, `?`, `[`, and `]`, respectively.
 
+For example, `Customer*` matches `Customer` and `CustomerArchive`; `Users[0-9]?` matches
+`Users1a` and `Users42`; and `Audit[!0-9]` matches `AuditX` but not `Audit7`. To match literal
+glob characters, use patterns such as `Legacy[?]` for the table `Legacy?` and
+`Report[[]2026[]]` for `Report[2026]`.
+
 SQL Server, every database, one table:
 
 ```yaml
@@ -192,7 +197,7 @@ tokens, and SQL policy do not expose shared-set concepts.
 
 ```yaml
 pii_rules:
-  - rules: # unnamed default: every pii_safe alias receives this rule
+  - rules: # optional unnamed default: every pii_safe alias receives this rule
       - database: "*"
         table: "Audit*"
         columns: [IpAddress]
