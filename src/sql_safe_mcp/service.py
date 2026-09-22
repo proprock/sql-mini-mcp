@@ -97,6 +97,16 @@ class DatabaseService:
                 "Call list_servers to discover configured aliases.",
             ) from exc
 
+    @staticmethod
+    def _require_meta_and_code_access(configured: ServerConfig) -> None:
+        if configured.access_level == "metadata":
+            raise DomainError(
+                ErrorCode.ACCESS_LEVEL_DENIED,
+                "Stored procedure tools are available only for meta_and_code or "
+                "all_pii_safe servers.",
+                "Use a server configured with access_level meta_and_code or all_pii_safe.",
+            )
+
     def _classified(
         self,
         alias: str,
@@ -275,6 +285,7 @@ class DatabaseService:
         name_contains: str | None = None,
     ) -> StoredProcedureList:
         configured = self._server(server)
+        self._require_meta_and_code_access(configured)
 
         def operation(engine: Engine) -> list[StoredProcedureSummary]:
             with engine.connect() as connection:
@@ -336,11 +347,11 @@ class DatabaseService:
         self, server: str, database: str, sql: str, max_rows: int | None = None
     ) -> SqlResult:
         configured = self._server(server)
-        if configured.access_level != "pii_safe" or configured.pii is None:
+        if configured.access_level != "all_pii_safe" or configured.pii is None:
             raise DomainError(
                 ErrorCode.ACCESS_LEVEL_DENIED,
-                "execute_sql is available only for pii_safe servers.",
-                "Use a server configured with access_level pii_safe.",
+                "execute_sql is available only for all_pii_safe servers.",
+                "Use a server configured with access_level all_pii_safe.",
             )
         runtime = self.config.runtime
         rows_limit = runtime.default_max_rows if max_rows is None else max_rows

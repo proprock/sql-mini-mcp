@@ -23,9 +23,9 @@ runtime:
   max_in_list_items: 500 # 1-100000
 
 # Optional shared groups. There may be at most one unnamed default group; it applies to
-# every pii_safe alias. Named groups apply only when listed exactly in pii.include.
+# every all_pii_safe alias. Named groups apply only when listed exactly in pii.include.
 pii_rules:
-  - rules: # Unnamed default: this Audit* rule applies to every pii_safe alias below.
+  - rules: # Unnamed default: this Audit* rule applies to every all_pii_safe alias below.
       - # `database` is an exact name or the whole wildcard "*".
         database: "*"
         # Omit `schema` to match every SQL Server schema; it is forbidden for mysql/mariadb.
@@ -44,8 +44,9 @@ servers:
     # Alias allowed characters: letters, digits, `.`, `_`, `-`; starts with a letter or digit.
     # `engine` choices: sqlserver, mysql, mariadb. SQL Server requires mssql+pyodbc.
     engine: sqlserver
-    # `access_level` choices: metadata (schema tools only) or pii_safe (also execute_sql).
-    access_level: pii_safe
+    # `access_level`: metadata (tables), meta_and_code (tables and procedure code), or
+    # all_pii_safe (also execute_sql).
+    access_level: all_pii_safe
     # Embedded placeholders are URL-encoded one URL component at a time. Keep host and port
     # separate; a full URL may instead be supplied through a whole-value ${NAME} placeholder.
     connection_url: >-
@@ -53,7 +54,7 @@ servers:
       @${LEGACY_PROD_HOST}/master
       ?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes
     # Must name an environment variable matching ^[A-Z_][A-Z0-9_]*$ that contains one
-    # base64-encoded 32-byte key. A pii_safe alias cannot reuse another alias's key.
+    # base64-encoded 32-byte key. An all_pii_safe alias cannot reuse another alias's key.
     pii_key_env: LEGACY_PROD_PII_KEY
     pii:
       # Named shared groups are applied in this written order, after the unnamed default.

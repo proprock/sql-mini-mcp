@@ -24,6 +24,16 @@ one object, otherwise the call fails as ambiguous and lists the candidate schema
   truncated.
 - `list_tables` returns base tables only.
 
+## Access levels
+
+- `metadata` (the default) permits `list_servers`, `list_databases`, `list_tables`, and
+  `get_table_definition`.
+- `meta_and_code` additionally permits `list_stored_procedures` and `get_stored_procedure`.
+- `all_pii_safe` additionally permits `execute_sql` with its configured PII policy.
+
+The tools remain published for every server alias. A call outside its alias's access level returns
+`ACCESS_LEVEL_DENIED` before a database connection is opened.
+
 ## Errors
 
 Errors state the safe cause and, when known, the corrective action - for example the candidate
@@ -36,8 +46,8 @@ No tool writes data or discovers servers, and the catalog is not published as MC
 
 ## execute_sql
 
-Available only for `access_level: pii_safe` servers; a `metadata` server returns
-`ACCESS_LEVEL_DENIED`. It accepts one `SELECT` from a small allowlist: local base tables, direct
+Available only for `access_level: all_pii_safe` servers; `metadata` and `meta_and_code` servers
+return `ACCESS_LEVEL_DENIED`. It accepts one `SELECT` from a small allowlist: local base tables, direct
 columns and aliases, literals, `COUNT(*)` without `GROUP BY`, `INNER`/`LEFT JOIN ... ON`, `WHERE`
 with `AND`/`OR`, comparisons, `IN` and `IS NULL`, `ORDER BY` on a direct column, and `TOP` (SQL Server) or `LIMIT n` (MySQL/MariaDB; no offset).
 Everything else is rejected with `QUERY_REJECTED`: CTEs, subqueries, unions, `DISTINCT`, `GROUP BY`,

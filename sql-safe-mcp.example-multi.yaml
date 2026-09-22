@@ -10,7 +10,8 @@ servers:
     # digits, `.`, `_`, and `-`; the first character must be a letter or digit.
     # `engine` choices: sqlserver, mysql, mariadb. SQL Server requires mssql+pyodbc.
     engine: sqlserver
-    # `access_level` choices: metadata (schema tools only) or pii_safe (also execute_sql).
+    # `access_level`: metadata (tables), meta_and_code (tables and procedure code), or
+    # all_pii_safe (also execute_sql).
     access_level: metadata
     # A whole-value ${NAME} placeholder may hold a complete SQLAlchemy URL.
     connection_url: "${REPORTING_SQL_URL}"
@@ -18,11 +19,11 @@ servers:
   billing:
     # `sqlserver` uses an mssql+pyodbc URL; the URL dialect must match this engine.
     engine: sqlserver
-    # pii_safe requires both `pii_key_env` and at least one effective local PII rule.
-    access_level: pii_safe
+    # all_pii_safe requires both `pii_key_env` and at least one effective local PII rule.
+    access_level: all_pii_safe
     connection_url: "${BILLING_SQL_URL}"
     # Environment-variable name for one base64-encoded 32-byte key. Names must match
-    # ^[A-Z_][A-Z0-9_]*$; each pii_safe alias needs a different key.
+    # ^[A-Z_][A-Z0-9_]*$; each all_pii_safe alias needs a different key.
     pii_key_env: BILLING_PII_KEY
     pii:
       # Only local rules are used in this file; `include` is intentionally absent.
@@ -40,7 +41,7 @@ servers:
   shop:
     # mysql and mariadb both use mysql+pymysql URLs. Select the engine matching the server.
     engine: mysql
-    access_level: pii_safe
+    access_level: all_pii_safe
     connection_url: "${SHOP_MYSQL_URL}"
     pii_key_env: SHOP_PII_KEY
     pii:

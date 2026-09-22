@@ -41,10 +41,12 @@ def _service(*responses: object, max_definition_chars: int = 1024) -> DatabaseSe
         servers={
             "zeta": ServerConfig(
                 engine="sqlserver",
+                access_level="meta_and_code",
                 connection_url=SecretStr("mssql+pyodbc://u:p@zeta/master?driver=x"),
             ),
             "Alpha": ServerConfig(
                 engine="sqlserver",
+                access_level="meta_and_code",
                 connection_url=SecretStr("mssql+pyodbc://u:p@alpha/master?driver=x"),
             ),
         },
@@ -84,6 +86,34 @@ def test_resolve_table_uses_explicit_schema_for_duplicate_names() -> None:
 def test_resolve_table_returns_not_found_for_missing_name() -> None:
     with pytest.raises(DomainError, match="NOT_FOUND"):
         DatabaseService._resolve_table([], "missing", None)
+
+
+def test_metadata_alias_cannot_list_stored_procedures_without_database_access() -> None:
+    registry = StubRegistry()
+    service = DatabaseService(
+        AppConfig(
+            version=1,
+            servers={
+                "tables": ServerConfig(
+                    engine="sqlserver",
+                    connection_url=SecretStr("mssql+pyodbc://u:p@tables/master?driver=x"),
+                )
+            },
+        ),
+        cast(EngineRegistry, registry),
+    )
+
+    async def scenario() -> None:
+        for operation in (
+            lambda: service.list_stored_procedures("tables", "app"),
+            lambda: service.get_stored_procedure("tables", "app", "Refresh"),
+        ):
+            with pytest.raises(DomainError) as raised:
+                await operation()
+            assert raised.value.code is ErrorCode.ACCESS_LEVEL_DENIED
+
+    asyncio.run(scenario())
+    assert registry.calls == []
 
 
 def test_list_servers_and_metadata_filters_are_case_insensitive() -> None:

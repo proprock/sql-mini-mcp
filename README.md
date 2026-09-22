@@ -24,12 +24,12 @@ PII columns.
 <!-- mcp-name: io.github.proprock/sql-safe-mcp -->
 
 Give a coding agent the schema knowledge it needs to write correct code - servers, databases,
-tables, columns, keys, indexes, and stored procedures. On aliases you mark `pii_safe`, it can also
+tables, columns, keys, indexes, and stored procedures. On aliases you mark `all_pii_safe`, it can also
 query real rows while configured personal data stays hidden behind authenticated tokens.
 
 ## PII-safe by default. Read-only by design.
 
-- **PII-safe by default** - on a `pii_safe` server, the columns you configure come back as
+- **PII-safe by default** - on an `all_pii_safe` server, the columns you configure come back as
   alias-bound, authenticated tokens (`pii:v1:...`), never as plaintext. An agent can still
   project, count, and filter on them with `=` and `IN` using tokens it was given, so it can follow
   a record without reading it. Tokens do not work on another server alias or with another key.
@@ -46,9 +46,10 @@ query real rows while configured personal data stays hidden behind authenticated
 - **Fails closed** - SQL validation is an allowlist. Unknown syntax, unresolved lineage, and
   unsupported protected-value types are refused, not guessed at. The verification evidence is in
   the [security model](SECURITY-MODEL.md).
-- **Least access first** - `access_level: metadata` (the default) exposes schema only;
-  `execute_sql` needs an explicit `pii_safe` alias with its own key. Database permissions stay the
-  primary control, so use a least-privilege login.
+- **Least access first** - `access_level: metadata` (the default) exposes database navigation and
+  table structure; `meta_and_code` additionally exposes stored procedures; `execute_sql` needs an
+  explicit `all_pii_safe` alias with its own key. Database permissions stay the primary control,
+  so use a least-privilege login.
 - **Secrets stay out of sight** - connection URLs live in YAML with `${NAME}` placeholders resolved
   from the environment. They never appear in logs or model-visible errors.
 - **Compact, predictable output** - object-rooted results with stable sorting, literal
@@ -70,9 +71,9 @@ query real rows while configured personal data stays hidden behind authenticated
 | `list_databases` | 🟢 read | Databases visible to the credentials |
 | `list_tables` | 🟢 read | Base tables, filtered by schema or name |
 | `get_table_definition` | 🟢 read | Columns, keys, constraints, and indexes of one table |
-| `list_stored_procedures` | 🟢 read | Stored procedures, without definitions |
-| `get_stored_procedure` | 🟢 read | The definition of one stored procedure |
-| `execute_sql` | 🟢 read | One restricted `SELECT` on a `pii_safe` server; protected columns return tokens |
+| `list_stored_procedures` | 🟢 read | Stored procedures, without definitions; requires `meta_and_code` or `all_pii_safe` |
+| `get_stored_procedure` | 🟢 read | The definition of one stored procedure; requires `meta_and_code` or `all_pii_safe` |
+| `execute_sql` | 🟢 read | One restricted `SELECT` on an `all_pii_safe` server; protected columns return tokens |
 
 > [!NOTE]
 > **Status:** SQL Server supports every tool. MySQL and MariaDB (`engine: mysql` or `mariadb`,
@@ -94,7 +95,7 @@ or
 pip install sql-safe-mcp
 ```
 
-Pin a version when you want a fixed surface: `uvx sql-safe-mcp==1.4.0`.
+Pin a version when you want a fixed surface: `uvx sql-safe-mcp==1.5.0`.
 
 Requires Python 3.12+, [uv](https://docs.astral.sh/uv/) (or `pip`), and
 [Microsoft ODBC Driver 18 for SQL Server](https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server)

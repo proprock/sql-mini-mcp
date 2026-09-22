@@ -186,7 +186,7 @@ def _config(keys: dict[str, bytes | None]) -> AppConfig:
         }
         if key is not None:
             server.update(
-                access_level="pii_safe",
+                access_level="all_pii_safe",
                 pii_key_env="K",
                 pii={"rules": [{"database": "*", "table": "T", "columns": ["c"]}]},
                 pii_key=base64.b64encode(key).decode(),
@@ -195,7 +195,7 @@ def _config(keys: dict[str, bytes | None]) -> AppConfig:
     return AppConfig.model_validate({"version": 1, "servers": servers})
 
 
-def test_registry_builds_codecs_only_for_pii_safe_aliases() -> None:
+def test_registry_builds_codecs_only_for_all_pii_safe_aliases() -> None:
     registry = TokenKeyRegistry.from_config(_config({"a": KEY, "b": OTHER_KEY, "m": None}))
     token = registry.codec_for("a").encrypt("x")
     invalid(token, registry.codec_for("b"))

@@ -69,7 +69,7 @@ def app_config() -> AppConfig:
     def server(key: bytes, key_env: str) -> dict[str, object]:
         return {
             "engine": "sqlserver",
-            "access_level": "pii_safe",
+            "access_level": "all_pii_safe",
             "connection_url": "mssql+pyodbc://u:p@sql/master?driver=x",
             "pii_key_env": key_env,
             "pii_key": base64.b64encode(key).decode(),

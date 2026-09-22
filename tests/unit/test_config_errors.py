@@ -114,7 +114,7 @@ def _model(key: str) -> dict[str, object]:
         "servers": {
             "s": {
                 "engine": "sqlserver",
-                "access_level": "pii_safe",
+                "access_level": "all_pii_safe",
                 "connection_url": URL,
                 "pii_key_env": "K",
                 "pii": {"rules": [{"database": "*", "table": "T", "columns": ["c"]}]},
@@ -170,7 +170,7 @@ def test_structure_errors_have_exact_messages() -> None:
 
 
 def test_invalid_pii_key_values_have_exact_messages() -> None:
-    extra = "    access_level: pii_safe\n    pii_key_env: K\n"
+    extra = "    access_level: all_pii_safe\n    pii_key_env: K\n"
     assert _message(_yaml(extra=extra), {"K": "!!!not base64"}) == (
         "Invalid configuration: PII key for server 's' is not valid base64"
     )
@@ -203,9 +203,9 @@ def test_model_level_validation_errors_are_reported() -> None:
     assert "metadata servers cannot configure" in summary(
         {"version": 1, "servers": {"s": metadata_with_pii}}
     )
-    pii_safe_without_keys = dict(server, access_level="pii_safe")
-    assert "pii_safe servers require pii_key_env and pii rules" in summary(
-        {"version": 1, "servers": {"s": pii_safe_without_keys}}
+    all_pii_safe_without_keys = dict(server, access_level="all_pii_safe")
+    assert "all_pii_safe servers require pii_key_env and pii rules" in summary(
+        {"version": 1, "servers": {"s": all_pii_safe_without_keys}}
     )
 
 

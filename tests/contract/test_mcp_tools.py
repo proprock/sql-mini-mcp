@@ -138,9 +138,14 @@ def _secure_config() -> AppConfig:
                     "engine": "sqlserver",
                     "connection_url": "mssql+pyodbc://u:p@sql/master?driver=x",
                 },
+                "code": {
+                    "engine": "sqlserver",
+                    "access_level": "meta_and_code",
+                    "connection_url": "mssql+pyodbc://u:p@sql/master?driver=x",
+                },
                 "secure": {
                     "engine": "sqlserver",
-                    "access_level": "pii_safe",
+                    "access_level": "all_pii_safe",
                     "connection_url": "mssql+pyodbc://u:p@sql/master?driver=x",
                     "pii_key_env": "K",
                     "pii_key": base64.b64encode(KEY).decode(),
@@ -255,20 +260,21 @@ def test_execute_sql_returns_structured_result_with_tokens(monkeypatch: Any) -> 
     asyncio.run(scenario())
 
 
-def test_execute_sql_denied_for_metadata_alias(monkeypatch: Any) -> None:
+def test_execute_sql_denied_for_metadata_and_meta_and_code_aliases(monkeypatch: Any) -> None:
     connection = _Connection()
     _patch_database(monkeypatch, connection)
 
     async def scenario() -> None:
         async with Client(create_server(_secure_config()), raise_exceptions=True) as client:
-            result = await client.call_tool(
-                "execute_sql",
-                {"server": "legacy", "database": "app", "sql": "SELECT Id FROM Users"},
-            )
-            assert result.is_error is True
-            content = result.content[0]
-            assert isinstance(content, TextContent)
-            assert "[ACCESS_LEVEL_DENIED]" in content.text
+            for alias in ("legacy", "code"):
+                result = await client.call_tool(
+                    "execute_sql",
+                    {"server": alias, "database": "app", "sql": "SELECT Id FROM Users"},
+                )
+                assert result.is_error is True
+                content = result.content[0]
+                assert isinstance(content, TextContent)
+                assert "[ACCESS_LEVEL_DENIED]" in content.text
 
     asyncio.run(scenario())
     assert connection.calls == []

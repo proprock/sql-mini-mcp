@@ -26,7 +26,7 @@ means there is no SQL Server `schema` choice to configure.
 ### Multi: local PII rules only
 
 [`sql-safe-mcp.example-multi.yaml`](../sql-safe-mcp.example-multi.yaml) keeps PII rules next to
-each `pii_safe` alias. It has no top-level `pii_rules`, so no rule is silently inherited by another
+each `all_pii_safe` alias. It has no top-level `pii_rules`, so no rule is silently inherited by another
 server. The SQL Server rule shows an optional `schema`; the MySQL rule omits it because MySQL and
 MariaDB reject `schema` in PII rules. Each PII-safe alias names a different environment key.
 
@@ -74,10 +74,10 @@ servers:
 |---|---|
 | alias (the map key) | Letters, digits, `.`, `_`, `-`; starts with a letter or digit. This is what the agent passes as `server`. |
 | `engine` | `sqlserver` (`mssql+pyodbc`), `mysql` or `mariadb` (both `mysql+pymysql`). MySQL and MariaDB have no schema level: `schema` is always `null`, and a `pii` rule for them must not set `schema` (the table is matched by `database` and `table`). |
-| `access_level` | `metadata` (default) or `pii_safe`. |
+| `access_level` | `metadata` (default: navigation and table structure), `meta_and_code` (also stored procedures), or `all_pii_safe` (also `execute_sql`). `pii_safe` is not accepted. |
 | `connection_url` | Required. A SQLAlchemy `mssql+pyodbc://` (SQL Server) or `mysql+pymysql://` (MySQL, MariaDB) URL whose dialect must match `engine`. Treated as a secret. |
-| `pii_key_env` | Required for `pii_safe`, forbidden otherwise. The name of the environment variable holding the alias key; matches `^[A-Z_][A-Z0-9_]*$`. |
-| `pii` | Required for `pii_safe`, forbidden otherwise. Holds `rules`; see [PII rules](#pii-rules). |
+| `pii_key_env` | Required for `all_pii_safe`, forbidden otherwise. The name of the environment variable holding the alias key; matches `^[A-Z_][A-Z0-9_]*$`. |
+| `pii` | Required for `all_pii_safe`, forbidden otherwise. Holds `rules`; see [PII rules](#pii-rules). |
 
 ### `connection_url`
 
@@ -162,9 +162,9 @@ connection_url: "mssql+pyodbc://${DEV_SQL_USER}:${DEV_SQL_PASSWORD}@${DEV_SQL_HO
 ```
 
 
-## PII-safe servers
+## All-PII-safe servers
 
-`pii_safe` enables `execute_sql` for a server alias. Such an alias requires its own base64-encoded 32-byte key in the variable named by `pii_key_env`,
+`all_pii_safe` enables `execute_sql` for a server alias. Such an alias requires its own base64-encoded 32-byte key in the variable named by `pii_key_env`,
 plus at least one effective PII rule. Effective rules can be local under `pii.rules`, inherited
 from an unnamed default set, or explicitly included from named shared sets.
 
@@ -184,8 +184,8 @@ sql-safe-mcp --gen-pii-key 3
 
 A key reused by two aliases is rejected. Tokens authenticate the alias as associated data, so
 they cannot cross aliases even if keys are duplicated outside normal config loading. Rotating a key
-or renaming an alias will invalidate existing tokens. A `metadata` server must not set
-`pii_key_env` or `pii`.
+or renaming an alias will invalidate existing tokens. `metadata` and `meta_and_code` servers must
+not set `pii_key_env` or `pii`.
 
 ### PII rules
 
@@ -284,7 +284,7 @@ pii:
 
 Top-level `pii_rules` is optional. If present, it is a non-empty sequence of strict groups with a
 non-empty `rules` list. A group without `name` is the one unnamed default; at most one may exist,
-and its rules apply to every `pii_safe` alias. A named group is inactive until an alias lists its
+and its rules apply to every `all_pii_safe` alias. A named group is inactive until an alias lists its
 exact, case-sensitive name in `pii.include`. Unused named groups are allowed.
 
 `include` must be a YAML sequence, not a comma-separated string. Unknown names and repeated names
@@ -295,7 +295,7 @@ tokens, and SQL policy do not expose shared-set concepts.
 
 ```yaml
 pii_rules:
-  - rules: # optional unnamed default: every pii_safe alias receives this rule
+  - rules: # optional unnamed default: every all_pii_safe alias receives this rule
       - database: "*"
         table: "Audit*"
         columns: [IpAddress]
@@ -309,7 +309,7 @@ pii_rules:
 servers:
   app:
     engine: sqlserver
-    access_level: pii_safe
+    access_level: all_pii_safe
     connection_url: "${APP_SQL_URL}"
     pii_key_env: APP_PII_KEY
     pii:
@@ -320,11 +320,11 @@ servers:
           columns: [HolderName]
 ```
 
-A `pii_safe` alias may omit `pii` only when the unnamed default yields at least one rule. The
+A `all_pii_safe` alias may omit `pii` only when the unnamed default yields at least one rule. The
 legacy local-only `pii.rules` form remains valid. Engine restrictions are checked after resolution:
 a shared rule with `schema` may be used by SQL Server but makes a MySQL/MariaDB alias that includes
-it invalid. A global rule set alone never changes a `metadata` alias; metadata aliases still cannot
-configure `pii_key_env`, `pii.include`, or `pii.rules`.
+it invalid. A global rule set alone never changes a `metadata` or `meta_and_code` alias; those
+aliases still cannot configure `pii_key_env`, `pii.include`, or `pii.rules`.
 
 ## Runtime limits
 

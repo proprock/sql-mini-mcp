@@ -7,6 +7,14 @@ categories `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, and `Security`.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-22
+
+### Changed
+
+- `access_level` now defaults to table-only `metadata`; `meta_and_code` restores stored-procedure
+  discovery and definitions, and `all_pii_safe` enables PII-protected `execute_sql`. The former
+  `pii_safe` value is rejected and must be replaced with `all_pii_safe`.
+
 ## [1.4.0] - 2026-09-22
 
 ### Added

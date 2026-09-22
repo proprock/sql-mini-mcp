@@ -9,7 +9,7 @@ The MCP caller, SQL input, database metadata, rows, and tokens are untrusted. Th
 environment, host OS, configured database server, and credentials form the trusted boundary.
 Database credentials remain the primary authorization control.
 
-PII protection covers only configured columns. Each `pii_safe` server alias has a unique AES-256
+PII protection covers only configured columns. Each `all_pii_safe` server alias has a unique AES-256
 key and a distinct authenticated token domain. Tokens are bearer secrets and must not be logged.
 
 SQL validation is an allowlist. Unknown syntax, cross-database names, unresolved tables or columns,
@@ -81,7 +81,7 @@ member of `security/reasons.py`, `reject()` refuses anything else, and tests pin
   read metadata only.
 - Keep connection URLs and PII keys in the host's own configuration or environment. Never commit
   them or a `.env` file, and rotate a credential or key at once if it is exposed.
-- Give every `pii_safe` alias its own key. Rotating a key or renaming an alias invalidates its
+- Give every `all_pii_safe` alias its own key. Rotating a key or renaming an alias invalidates its
   existing tokens.
 - Use a local, disposable, or explicitly non-production database for development and testing, never
   stored production credentials or data, and never commit raw database captures; see

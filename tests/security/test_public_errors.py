@@ -158,7 +158,7 @@ def test_missing_key_registry_error_is_exact() -> None:
         TokenKeyRegistry({}).codec_for("x")
     assert info.value.code is ErrorCode.ACCESS_LEVEL_DENIED
     assert info.value.public_message == "PII tokens are not available for this server."
-    assert info.value.hint == "Use a server configured with access_level pii_safe."
+    assert info.value.hint == "Use a server configured with access_level all_pii_safe."
 
 
 def test_row_limit_errors_are_exact() -> None:

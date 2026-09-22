@@ -36,7 +36,7 @@ Problems in this server's own code, such as:
   startup message, or a model-visible error;
 - the server executing SQL that did not come from a `ValidatedQuery`, or any tool changing data;
 - a name or filter reaching SQL by concatenation instead of a bound or quoted identifier;
-- a PII token that decrypts under another server alias, or protected values leaving a `pii_safe`
+- a PII token that decrypts under another server alias, or protected values leaving an `all_pii_safe`
   server in the clear;
 - a configuration that is accepted but weaker than it declares, such as a duplicated PII key;
 - an unknown or unresolved construct that is allowed instead of refused.

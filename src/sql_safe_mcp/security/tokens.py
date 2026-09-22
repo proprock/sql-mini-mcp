@@ -177,7 +177,7 @@ class TokenCodec:
 
 
 class TokenKeyRegistry:
-    """One codec per pii_safe alias; a codec never sees another alias's key."""
+    """One codec per all_pii_safe alias; a codec never sees another alias's key."""
 
     __slots__ = ("_codecs",)
 
@@ -203,5 +203,5 @@ class TokenKeyRegistry:
             raise DomainError(
                 ErrorCode.ACCESS_LEVEL_DENIED,
                 "PII tokens are not available for this server.",
-                "Use a server configured with access_level pii_safe.",
+                "Use a server configured with access_level all_pii_safe.",
             ) from None
