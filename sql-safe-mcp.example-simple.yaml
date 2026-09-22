@@ -1,0 +1,20 @@
+# Minimal configuration: one metadata-only SQL Server instance.
+# `version` is required and its only accepted value is 1.
+version: 1
+
+# `servers` is required and must contain at least one named alias.
+servers:
+  reporting:
+    # The alias is what an MCP client passes as `server`. It may contain letters,
+    # digits, `.`, `_`, or `-`, and must start with a letter or digit.
+    # `engine` choices: sqlserver, mysql, mariadb. SQL Server uses mssql+pyodbc URLs.
+    engine: sqlserver
+    # `access_level` choices: metadata (schema tools only) or pii_safe (also execute_sql).
+    # Choose metadata when an agent must never read rows.
+    access_level: metadata
+    # The whole URL comes from one secret environment variable. A full placeholder is not
+    # URL-encoded, so REPORTING_SQL_URL may contain the complete mssql+pyodbc URL.
+    connection_url: "${REPORTING_SQL_URL}"
+
+# `runtime` and `logging` are deliberately omitted: their documented defaults apply.
+# This metadata-only SQL Server example has no PII rules, so it also has no `schema` setting.

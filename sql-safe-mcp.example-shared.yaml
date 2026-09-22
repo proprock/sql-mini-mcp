@@ -1,0 +1,80 @@
+# Full configuration: shared PII rule sets, per-alias rules, runtime limits, and logging.
+# `version` is required and its only accepted value is 1.
+version: 1
+
+logging:
+  # Optional. Values: DEBUG, INFO, WARNING, ERROR (uppercase). Logs go only to stderr.
+  level: INFO
+
+runtime:
+  # Optional limits. Each selected value must be in its documented inclusive range.
+  max_concurrent_db_operations: 8 # 1-128
+  engine_cache_size: 32 # 1-1024
+  pool_size: 2 # 1-32
+  max_overflow: 2 # 0-64
+  pool_timeout_seconds: 10 # 1-300
+  statement_timeout_seconds: 30 # 1-3600
+  max_definition_chars: 262144 # 1024-10000000
+  default_max_rows: 200 # 1-100000; cannot exceed hard_max_rows
+  hard_max_rows: 1000 # 1-100000
+  max_sql_chars: 65536 # 256-1000000
+  max_ast_nodes: 2000 # 10-100000
+  max_joins: 8 # 0-100
+  max_in_list_items: 500 # 1-100000
+
+# Optional shared groups. There may be at most one unnamed default group; it applies to
+# every pii_safe alias. Named groups apply only when listed exactly in pii.include.
+pii_rules:
+  - rules: # Unnamed default: this Audit* rule applies to every pii_safe alias below.
+      - # `database` is an exact name or the whole wildcard "*".
+        database: "*"
+        # Omit `schema` to match every SQL Server schema; it is forbidden for mysql/mariadb.
+        table: "Audit*" # Full shell-glob: *, ?, [abc], [a-z], [!abc]; not a substring match.
+        columns: [IpAddress] # Non-empty list of exact, case-insensitively unique names.
+  - # Named group names are exact and case-sensitive in pii.include.
+    name: users_pii
+    rules:
+      - database: "*"
+        schema: dbo # Optional for SQL Server; omit it to match every schema.
+        table: "Users[0-9]?"
+        columns: [Email, FirstName, LastName]
+
+servers:
+  legacy-prod:
+    # Alias allowed characters: letters, digits, `.`, `_`, `-`; starts with a letter or digit.
+    # `engine` choices: sqlserver, mysql, mariadb. SQL Server requires mssql+pyodbc.
+    engine: sqlserver
+    # `access_level` choices: metadata (schema tools only) or pii_safe (also execute_sql).
+    access_level: pii_safe
+    # Embedded placeholders are URL-encoded one URL component at a time. Keep host and port
+    # separate; a full URL may instead be supplied through a whole-value ${NAME} placeholder.
+    connection_url: >-
+      mssql+pyodbc://${LEGACY_PROD_USER}:${LEGACY_PROD_PASSWORD}
+      @${LEGACY_PROD_HOST}/master
+      ?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes
+    # Must name an environment variable matching ^[A-Z_][A-Z0-9_]*$ that contains one
+    # base64-encoded 32-byte key. A pii_safe alias cannot reuse another alias's key.
+    pii_key_env: LEGACY_PROD_PII_KEY
+    pii:
+      # Named shared groups are applied in this written order, after the unnamed default.
+      include: [users_pii]
+      rules: # Local rules apply last; all effective rules are combined, not overridden.
+        - database: Billing
+          schema: dbo
+          table: Cards
+          columns: [HolderName]
+
+  reporting-metadata:
+    engine: sqlserver
+    access_level: metadata
+    # Whole-value placeholder: REPORTING_SQL_URL holds the complete mssql+pyodbc URL.
+    connection_url: "${REPORTING_SQL_URL}"
+
+  reporting-mysql:
+    # mysql and mariadb both use mysql+pymysql URLs; choose the matching server engine.
+    engine: mysql
+    access_level: metadata
+    connection_url: "${REPORTING_MYSQL_URL}"
+
+# A metadata alias must not set pii_key_env or pii. `runtime` and `logging` are optional;
+# remove either block to use its documented defaults.

@@ -45,7 +45,9 @@ include = [
     "/README.md",
     "/pyproject.toml",
     "/server.json",
-    "/sql-safe-mcp.example.yaml",
+    "/sql-safe-mcp.example-simple.yaml",
+    "/sql-safe-mcp.example-multi.yaml",
+    "/sql-safe-mcp.example-shared.yaml",
     "/src",
 ]
 

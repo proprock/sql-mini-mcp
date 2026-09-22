@@ -1,8 +1,41 @@
 # Configuration
 
 Connection topology lives in a YAML file. Secrets live in the process environment and are pulled in
-with `${NAME}` placeholders. A complete example is in
-[sql-safe-mcp.example.yaml](../sql-safe-mcp.example.yaml).
+with `${NAME}` placeholders. Three complete, commented templates are available. Copy one to
+`sql-safe-mcp.yaml` and replace only its environment-variable names; never put a URL, credential,
+or PII key into the file.
+
+| Template | Use it when | It demonstrates |
+|---|---|---|
+| [simple](../sql-safe-mcp.example-simple.yaml) | You need one SQL Server instance and schema metadata only. | One `metadata` alias, with no PII or logging settings. |
+| [multi](../sql-safe-mcp.example-multi.yaml) | You need several independent instances and local PII policies. | SQL Server and MySQL aliases; every PII rule is built into its alias. |
+| [shared](../sql-safe-mcp.example-shared.yaml) | Several PII-safe aliases need reusable policies or you need explicit operating limits. | Shared default/named PII sets, local additions, all runtime limits, and logging. |
+
+## Complete examples
+
+All three templates comment each selected setting and identify the allowed choice when the setting
+uses a fixed set of values. They are valid independent starting points, not fragments to combine.
+
+### Simple: one metadata-only server
+
+[`sql-safe-mcp.example-simple.yaml`](../sql-safe-mcp.example-simple.yaml) is the README quick-start
+configuration. It intentionally has no `logging`, `runtime`, `pii_key_env`, or `pii` blocks, so
+the defaults apply and `execute_sql` is unavailable. It is SQL Server metadata only; no PII rule
+means there is no SQL Server `schema` choice to configure.
+
+### Multi: local PII rules only
+
+[`sql-safe-mcp.example-multi.yaml`](../sql-safe-mcp.example-multi.yaml) keeps PII rules next to
+each `pii_safe` alias. It has no top-level `pii_rules`, so no rule is silently inherited by another
+server. The SQL Server rule shows an optional `schema`; the MySQL rule omits it because MySQL and
+MariaDB reject `schema` in PII rules. Each PII-safe alias names a different environment key.
+
+### Shared: reusable PII rules and operating settings
+
+[`sql-safe-mcp.example-shared.yaml`](../sql-safe-mcp.example-shared.yaml) is the full reference
+template. Its unnamed shared group applies to every PII-safe alias, while `users_pii` applies only
+where the exact name appears in `pii.include`. The file also shows the complete runtime-limit set,
+their accepted ranges, the allowed log levels, and local rules that are added after shared ones.
 
 ## Locating and checking the file
 
@@ -45,6 +78,71 @@ servers:
 | `connection_url` | Required. A SQLAlchemy `mssql+pyodbc://` (SQL Server) or `mysql+pymysql://` (MySQL, MariaDB) URL whose dialect must match `engine`. Treated as a secret. |
 | `pii_key_env` | Required for `pii_safe`, forbidden otherwise. The name of the environment variable holding the alias key; matches `^[A-Z_][A-Z0-9_]*$`. |
 | `pii` | Required for `pii_safe`, forbidden otherwise. Holds `rules`; see [PII rules](#pii-rules). |
+
+### `connection_url`
+
+`connection_url` tells SQLAlchemy which driver to use and where the database lives. Its general
+shape is:
+
+```text
+dialect+driver://user:password@host:port/database?option=value&another_option=value
+```
+
+`dialect+driver` is fixed by `engine`; `user`, `password`, `host`, `port`, and `database` identify
+the database; and the optional part after `?` contains driver-specific `name=value` options joined
+with `&`. Keep the complete URL in a secret environment variable, or construct it from individual
+environment variables as below. Do not put credentials in the YAML file.
+
+#### SQL Server (`engine: sqlserver`)
+
+SQL Server requires the exact `mssql+pyodbc` dialect. `pyodbc` connects through an installed
+Microsoft ODBC driver; this project supports Microsoft ODBC Driver 18 for SQL Server.
+
+```yaml
+connection_url: >-
+  mssql+pyodbc://${SQLSERVER_USER}:${SQLSERVER_PASSWORD}
+  @${SQLSERVER_HOST}:${SQLSERVER_PORT}/${SQLSERVER_DATABASE}
+  ?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=no
+```
+
+| Part or option | Meaning |
+|---|---|
+| `SQLSERVER_USER`, `SQLSERVER_PASSWORD` | SQL Server login and its password. These placeholders are URL-encoded during substitution, so characters such as `@` or `/` in a password are safe. |
+| `SQLSERVER_HOST` | DNS name or IP address of the SQL Server. Keep it separate from the port. |
+| `SQLSERVER_PORT` | TCP port, for example `1433`. Omit `:${SQLSERVER_PORT}` from the URL when the driver's default or instance configuration should choose the port. |
+| `SQLSERVER_DATABASE` | Database to connect to, for example `master` or `Reporting`. Database permissions still control what the server can read. |
+| `driver` | Required ODBC driver name. It must name an installed driver; spaces are written as `+` because this is a URL. `ODBC+Driver+18+for+SQL+Server` is the usual value for Driver 18. |
+| `Encrypt=yes` | Requests an encrypted connection. Keep it enabled for normal deployments. |
+| `TrustServerCertificate=no` | Requires certificate validation. Set it to `yes` only when a controlled development environment deliberately uses a certificate that cannot be validated. |
+
+Other query options are ODBC connection attributes. Use only options required by the server or
+your organization's connection policy; they remain part of the secret URL when using a whole-value
+environment variable.
+
+#### MySQL or MariaDB (`engine: mysql` or `engine: mariadb`)
+
+Both engines require the exact `mysql+pymysql` dialect. The engine name must describe the actual
+server, even though both use the same PyMySQL driver.
+
+```yaml
+connection_url: >-
+  mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}
+  @${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}
+  ?charset=utf8mb4&connect_timeout=10
+```
+
+| Part or option | Meaning |
+|---|---|
+| `MYSQL_USER`, `MYSQL_PASSWORD` | MySQL/MariaDB login and password. Embedded placeholders are URL-encoded during substitution. |
+| `MYSQL_HOST` | DNS name or IP address of the database server. Keep it separate from the port. |
+| `MYSQL_PORT` | TCP port, commonly `3306`. Omit `:${MYSQL_PORT}` when the driver's default port should be used. |
+| `MYSQL_DATABASE` | Database (catalog) to connect to. MySQL and MariaDB have no separate schema level in this server. |
+| `charset=utf8mb4` | Requests the UTF-8 character set that supports the full Unicode range. Change it only when the database is configured for a different required character set. |
+| `connect_timeout=10` | Limits the driver's connection attempt to 10 seconds. Use a positive number appropriate for the network; it is separate from the YAML `runtime.pool_timeout_seconds`, which limits waiting for a pooled connection. |
+
+For either form, if a URL part must be literal rather than a placeholder, URL-encode reserved
+characters in that part. The following [Placeholders](#placeholders) section explains the
+whole-value and embedded-placeholder forms, including why `host` and `port` must be separate.
 
 ### Placeholders
 

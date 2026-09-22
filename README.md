@@ -120,10 +120,12 @@ sql-safe-mcp --check-config once variables are available.
 
 </details>
 
-### Configure multiple servers
+### Configure server
 
-Copy [sql-safe-mcp.example.yaml](sql-safe-mcp.example.yaml) to `sql-safe-mcp.yaml`. Add each
-database server under a named alias and keep credentials in environment variables:
+Copy [sql-safe-mcp.example-simple.yaml](sql-safe-mcp.example-simple.yaml) to
+`sql-safe-mcp.yaml`. This smallest configuration exposes schema metadata from one SQL Server
+instance and does not allow row queries. Keep the complete connection URL in an environment
+variable:
 
 ```yaml
 version: 1
@@ -132,28 +134,12 @@ servers:
     engine: sqlserver
     access_level: metadata
     connection_url: "${REPORTING_SQL_URL}"
-
-  billing:
-    engine: sqlserver
-    access_level: pii_safe
-    connection_url: "${BILLING_SQL_URL}"
-    pii_key_env: BILLING_PII_KEY
-    pii:
-      rules:
-        - database: Billing
-          schema: dbo
-          table: Customers
-          columns: [Email, FullName]
-
-  shop:
-    engine: mysql
-    access_level: metadata
-    connection_url: "mysql+pymysql://${SHOP_USER}:${SHOP_PASSWORD}@db.internal/shop"
 ```
 
-Here `reporting`, `billing`, and `shop` are the values an agent passes as `server`. Their
-credentials and access policies are independent. A missing variable, or an `engine` that does not
-match the URL dialect, stops the MCP server at startup.
+Here `reporting` is the value an agent passes as `server`. A missing variable, or an `engine` that
+does not match the URL dialect, stops the MCP server at startup. For multiple servers, local PII
+rules, shared PII rule sets, logging, and runtime limits, use the commented examples in the
+[configuration reference](docs/configuration.md#complete-examples).
 
 ### Check the configuration
 

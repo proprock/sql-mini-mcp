@@ -1,0 +1,53 @@
+# Several independently configured servers. This example deliberately has no top-level
+# `pii_rules`: every PII rule is local to the alias that uses it.
+# `version` is required and its only accepted value is 1.
+version: 1
+
+# `servers` is required and must contain at least one named alias.
+servers:
+  reporting:
+    # The alias is passed to every MCP tool as `server`. Allowed characters are letters,
+    # digits, `.`, `_`, and `-`; the first character must be a letter or digit.
+    # `engine` choices: sqlserver, mysql, mariadb. SQL Server requires mssql+pyodbc.
+    engine: sqlserver
+    # `access_level` choices: metadata (schema tools only) or pii_safe (also execute_sql).
+    access_level: metadata
+    # A whole-value ${NAME} placeholder may hold a complete SQLAlchemy URL.
+    connection_url: "${REPORTING_SQL_URL}"
+
+  billing:
+    # `sqlserver` uses an mssql+pyodbc URL; the URL dialect must match this engine.
+    engine: sqlserver
+    # pii_safe requires both `pii_key_env` and at least one effective local PII rule.
+    access_level: pii_safe
+    connection_url: "${BILLING_SQL_URL}"
+    # Environment-variable name for one base64-encoded 32-byte key. Names must match
+    # ^[A-Z_][A-Z0-9_]*$; each pii_safe alias needs a different key.
+    pii_key_env: BILLING_PII_KEY
+    pii:
+      # Only local rules are used in this file; `include` is intentionally absent.
+      rules:
+        - # `database` is an exact name or the complete wildcard "*".
+          database: Billing
+          # `schema` is optional for SQL Server; omit it to protect matching tables in
+          # every schema. It is forbidden for mysql and mariadb.
+          schema: dbo
+          # `table` is a case-insensitive full shell-glob: *, ?, [abc], [a-z], [!abc].
+          table: Customers
+          # `columns` is a non-empty, case-insensitively unique list of exact names.
+          columns: [Email, FullName]
+
+  shop:
+    # mysql and mariadb both use mysql+pymysql URLs. Select the engine matching the server.
+    engine: mysql
+    access_level: pii_safe
+    connection_url: "${SHOP_MYSQL_URL}"
+    pii_key_env: SHOP_PII_KEY
+    pii:
+      rules:
+        - # MySQL/MariaDB database is the catalog; no `schema` key is allowed here.
+          database: shop
+          table: customers
+          columns: [email, full_name, address]
+
+# `runtime` and `logging` are optional and omitted here, so their documented defaults apply.
