@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+reset=false
+pytest_args=()
+
+for argument in "$@"; do
+    case "$argument" in
+        --reset|-Reset)
+            reset=true
+            ;;
+        *)
+            pytest_args+=("$argument")
+            ;;
+    esac
+done
+
+require_docker() {
+    if ! docker info >/dev/null 2>&1; then
+        echo "Docker daemon is not ready. Start Docker and retry." >&2
+        exit 1
+    fi
+}
+
+random_suffix() {
+    command -v openssl >/dev/null || {
+        echo "openssl is required to generate a test password." >&2
+        exit 1
+    }
+    openssl rand -hex 16
+}
+
+compose_file="$(cd "$(dirname "$0")/.." && pwd)/compose.sqlserver.yml"
+
+require_docker
+export SQL_SAFE_MCP_DOCKER_SA_PASSWORD="${SQL_SAFE_MCP_DOCKER_SA_PASSWORD:-inspect}"
+
+if "$reset"; then
+    docker compose -f "$compose_file" down --volumes --remove-orphans
+    exit $?
+fi
+
+container_id="$(docker compose -f "$compose_file" ps -aq sqlserver)"
+if [[ -n "$container_id" ]]; then
+    password_entry="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container_id" | \
+        awk '/^MSSQL_SA_PASSWORD=/{print; exit}')"
+    if [[ -z "$password_entry" ]]; then
+        echo "The existing SQL Server container has no configured SA password." >&2
+        exit 1
+    fi
+    password="${password_entry#MSSQL_SA_PASSWORD=}"
+else
+    password="SqlSafeMcp!A1$(random_suffix)"
+fi
+
+export SQL_SAFE_MCP_DOCKER_SA_PASSWORD="$password"
+cleanup() {
+    unset SQL_SAFE_MCP_TEST_SQLSERVER_URL SQL_SAFE_MCP_AUDIT_DIR SQL_SAFE_MCP_DOCKER_SA_PASSWORD
+}
+trap cleanup EXIT
+
+docker compose -f "$compose_file" up -d --wait
+
+port_line="$(docker compose -f "$compose_file" port sqlserver 1433)"
+if [[ -z "$port_line" ]]; then
+    echo "Could not determine the SQL Server host port." >&2
+    exit 1
+fi
+port="${port_line##*:}"
+encoded_password="$(uv run python -c 'import sys; from urllib.parse import quote; print(quote(sys.argv[1], safe=""))' "$password")"
+export SQL_SAFE_MCP_TEST_SQLSERVER_URL="mssql+pyodbc://sa:${encoded_password}@127.0.0.1:${port}/master?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=yes"
+
+audit_dir="${TMPDIR:-/tmp}/sql-safe-mcp-audit"
+rm -rf "$audit_dir"
+export SQL_SAFE_MCP_AUDIT_DIR="$audit_dir"
+
+set +e
+uv run pytest tests/integration/sqlserver -m integration -v "${pytest_args[@]}"
+exit_code=$?
+set -e
+
+if [[ -d "$audit_dir" ]]; then
+    echo "Audit artifacts: $audit_dir"
+fi
+
+exit "$exit_code"
