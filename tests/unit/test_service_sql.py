@@ -94,9 +94,14 @@ def _config() -> AppConfig:
             "runtime": {"default_max_rows": 3, "hard_max_rows": 5},
             "servers": {
                 "plain": {"engine": "sqlserver", "connection_url": url},
+                "code": {
+                    "engine": "sqlserver",
+                    "access_level": "meta_and_code",
+                    "connection_url": url,
+                },
                 "secure": {
                     "engine": "sqlserver",
-                    "access_level": "pii_safe",
+                    "access_level": "all_pii_safe",
                     "connection_url": url,
                     "pii_key_env": "K",
                     "pii_key": base64.b64encode(KEY).decode(),
@@ -113,7 +118,7 @@ def _config() -> AppConfig:
                 },
                 "other": {
                     "engine": "sqlserver",
-                    "access_level": "pii_safe",
+                    "access_level": "all_pii_safe",
                     "connection_url": url,
                     "pii_key_env": "K2",
                     "pii_key": base64.b64encode(OTHER_KEY).decode(),
@@ -161,8 +166,9 @@ def error_of(
 
 def test_metadata_alias_is_denied_without_touching_the_database() -> None:
     service, registry = make()
-    error = error_of(service, "SELECT Id FROM Users", "plain")
-    assert error.code is ErrorCode.ACCESS_LEVEL_DENIED
+    for alias in ("plain", "code"):
+        error = error_of(service, "SELECT Id FROM Users", alias)
+        assert error.code is ErrorCode.ACCESS_LEVEL_DENIED
     assert registry.runs == []
 
 

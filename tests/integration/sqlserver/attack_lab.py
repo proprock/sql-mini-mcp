@@ -166,7 +166,7 @@ def _build_database(admin: Engine, database: str, suffix: str, writer: str) -> N
 def _pii_server(url: str, key: bytes, key_env: str, databases: tuple[str, str]) -> ServerConfig:
     return ServerConfig(
         engine="sqlserver",
-        access_level="pii_safe",
+        access_level="all_pii_safe",
         connection_url=SecretStr(url),
         pii_key_env=key_env,
         pii=PiiConfig(

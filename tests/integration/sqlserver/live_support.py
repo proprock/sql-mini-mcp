@@ -50,7 +50,7 @@ def _execute_batch(connection: Connection, statements: list[str]) -> None:
 def _pii_server(url: str, schema: str, key: bytes, key_env: str) -> ServerConfig:
     return ServerConfig(
         engine="sqlserver",
-        access_level="pii_safe",
+        access_level="all_pii_safe",
         connection_url=SecretStr(url),
         pii_key_env=key_env,
         pii=PiiConfig(

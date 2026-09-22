@@ -12,7 +12,7 @@ class OutputModel(BaseModel):
 class ServerSummary(OutputModel):
     name: str
     engine: Literal["sqlserver", "mysql", "mariadb"]
-    access_level: Literal["metadata", "pii_safe"]
+    access_level: Literal["metadata", "meta_and_code", "all_pii_safe"]
 
 
 class ServerList(OutputModel):

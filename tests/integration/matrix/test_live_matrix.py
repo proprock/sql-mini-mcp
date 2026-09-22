@@ -32,7 +32,7 @@ __all__ = ["live_database", "live_mariadb_only", "live_mysql_only"]
 class EngineCase:
     engine: str
     meta: str  # metadata alias
-    secure: str  # pii_safe alias
+    secure: str  # all_pii_safe alias
     key: bytes
     database: str  # metadata database
     sql_database: str
@@ -244,14 +244,14 @@ def test_live_shared_pii_rules_apply_only_after_config_resolution(
                     },
                     "mssql": {
                         "engine": "sqlserver",
-                        "access_level": "pii_safe",
+                        "access_level": "all_pii_safe",
                         "connection_url": url(live_database.config, "secure"),
                         "pii_key_env": "MATRIX_MSSQL_KEY",
                     },
                     **{
                         alias: {
                             "engine": live.engine,
-                            "access_level": "pii_safe",
+                            "access_level": "all_pii_safe",
                             "connection_url": url(live.sql_config, "secure"),
                             "pii_key_env": key_name,
                             "pii": {

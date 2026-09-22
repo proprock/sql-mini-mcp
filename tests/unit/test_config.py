@@ -65,7 +65,7 @@ version: 1
 servers:
   legacy:
     engine: sqlserver
-    access_level: pii_safe
+    access_level: all_pii_safe
     connection_url: ${URL}
     pii_key_env: LEGACY_KEY
     pii:
@@ -90,6 +90,61 @@ servers:
     assert _key(1) not in repr(config)
 
 
+def test_access_levels_distinguish_metadata_code_and_all_pii_safe_access(tmp_path: Path) -> None:
+    config = load_config(
+        _write(
+            tmp_path,
+            """
+version: 1
+servers:
+  tables:
+    engine: sqlserver
+    connection_url: ${TABLES_URL}
+  routines:
+    engine: sqlserver
+    access_level: meta_and_code
+    connection_url: ${ROUTINES_URL}
+  query:
+    engine: sqlserver
+    access_level: all_pii_safe
+    connection_url: ${QUERY_URL}
+    pii_key_env: QUERY_KEY
+    pii:
+      rules: [{database: "*", table: Users, columns: [Email]}]
+""",
+        ),
+        {
+            "TABLES_URL": "mssql+pyodbc://u:p@tables/master?driver=x",
+            "ROUTINES_URL": "mssql+pyodbc://u:p@routines/master?driver=x",
+            "QUERY_URL": "mssql+pyodbc://u:p@query/master?driver=x",
+            "QUERY_KEY": _key(1),
+        },
+    )
+
+    assert {alias: server.access_level for alias, server in config.servers.items()} == {
+        "tables": "metadata",
+        "routines": "meta_and_code",
+        "query": "all_pii_safe",
+    }
+
+
+def test_legacy_pii_safe_access_level_is_rejected(tmp_path: Path) -> None:
+    path = _write(
+        tmp_path,
+        """
+version: 1
+servers:
+  legacy:
+    engine: sqlserver
+    access_level: pii_safe
+    connection_url: ${URL}
+""",
+    )
+
+    with pytest.raises(DomainError, match="CONFIG_ERROR"):
+        load_config(path, {"URL": "mssql+pyodbc://u:p@legacy/master?driver=x"})
+
+
 def test_resolves_default_named_and_local_pii_rules_in_stable_order(tmp_path: Path) -> None:
     path = _write(
         tmp_path,
@@ -109,12 +164,12 @@ pii_rules:
 servers:
   default_only:
     engine: sqlserver
-    access_level: pii_safe
+    access_level: all_pii_safe
     connection_url: ${DEFAULT_URL}
     pii_key_env: DEFAULT_KEY
   named_and_local:
     engine: sqlserver
-    access_level: pii_safe
+    access_level: all_pii_safe
     connection_url: ${NAMED_URL}
     pii_key_env: NAMED_KEY
     pii:
@@ -195,7 +250,7 @@ pii_rules:
 servers:
   app:
     engine: sqlserver
-    access_level: pii_safe
+    access_level: all_pii_safe
     connection_url: ${URL}
     pii_key_env: KEY
 """
@@ -220,7 +275,7 @@ pii_rules:
 servers:
   app:
     engine: sqlserver
-    access_level: pii_safe
+    access_level: all_pii_safe
     connection_url: ${URL}
     pii_key_env: KEY
 """,
@@ -245,7 +300,7 @@ pii_rules:
 servers:
   app:
     engine: sqlserver
-    access_level: pii_safe
+    access_level: all_pii_safe
     connection_url: ${URL}
     pii_key_env: KEY
     pii:
@@ -276,7 +331,7 @@ pii_rules:
 servers:
   app:
     engine: sqlserver
-    access_level: pii_safe
+    access_level: all_pii_safe
     connection_url: ${URL}
     pii_key_env: KEY
     pii: {include: [Users]}
@@ -305,7 +360,7 @@ pii_rules:
 servers:
   app:
     engine: {engine}
-    access_level: pii_safe
+    access_level: all_pii_safe
     connection_url: mysql+pymysql://u:p@app/database
     pii_key_env: KEY
     pii: {pii}
@@ -350,7 +405,7 @@ servers:
             "{include: [shared, shared]}",
             "more than once",
         ),
-        ("", "{include: []}", "pii_safe servers require pii_key_env and pii rules"),
+        ("", "{include: []}", "all_pii_safe servers require pii_key_env and pii rules"),
     ],
 )
 def test_shared_rule_resolution_rejects_ambiguous_or_empty_effective_rules(
@@ -366,7 +421,7 @@ version: 1
 servers:
   app:
     engine: sqlserver
-    access_level: pii_safe
+    access_level: all_pii_safe
     connection_url: ${URL}
     pii_key_env: KEY
     pii: """
@@ -393,7 +448,7 @@ servers:
     connection_url: ${META_URL}
   app:
     engine: sqlserver
-    access_level: pii_safe
+    access_level: all_pii_safe
     connection_url: ${APP_URL}
     pii_key_env: KEY
 """,
@@ -440,6 +495,30 @@ servers:
     )
 
 
+def test_meta_and_code_alias_rejects_pii_configuration_with_a_stable_error(
+    tmp_path: Path,
+) -> None:
+    path = _write(
+        tmp_path,
+        """
+version: 1
+servers:
+  routines:
+    engine: sqlserver
+    access_level: meta_and_code
+    connection_url: ${URL}
+    pii: {rules: [{database: "*", table: Users, columns: [Email]}]}
+""",
+    )
+
+    with pytest.raises(DomainError) as raised:
+        load_config(path, {"URL": "mssql+pyodbc://u:p@routines/master?driver=x"})
+
+    assert raised.value.public_message == (
+        "Invalid configuration: meta_and_code servers cannot configure pii_key_env or pii rules"
+    )
+
+
 def test_rejects_reused_key_across_server_aliases(tmp_path: Path) -> None:
     path = _write(
         tmp_path,
@@ -448,13 +527,13 @@ version: 1
 servers:
   one:
     engine: sqlserver
-    access_level: pii_safe
+    access_level: all_pii_safe
     connection_url: ${URL_ONE}
     pii_key_env: KEY_ONE
     pii: {rules: [{database: "*", schema: dbo, table: Users, columns: [Email]}]}
   two:
     engine: sqlserver
-    access_level: pii_safe
+    access_level: all_pii_safe
     connection_url: ${URL_TWO}
     pii_key_env: KEY_TWO
     pii: {rules: [{database: "*", schema: dbo, table: Users, columns: [Email]}]}
@@ -480,7 +559,7 @@ version: 1
 servers:
   legacy:
     engine: sqlserver
-    access_level: pii_safe
+    access_level: all_pii_safe
     connection_url: ${URL}
     pii_key_env: KEY
     pii: {rules: [{database: "*", schema: dbo, table: Users, columns: [Email]}]}
@@ -537,7 +616,7 @@ servers:
 
 @pytest.mark.parametrize("engine", ["mysql", "mariadb"])
 @pytest.mark.parametrize(("schema_line", "valid"), [("", True), ("          schema: app\n", False)])
-def test_pii_safe_for_mysql_family_forbids_rule_schema(
+def test_all_pii_safe_for_mysql_family_forbids_rule_schema(
     tmp_path: Path, engine: str, schema_line: str, valid: bool
 ) -> None:
     path = _write(
@@ -547,7 +626,7 @@ version: 1
 servers:
   one:
     engine: {engine}
-    access_level: pii_safe
+    access_level: all_pii_safe
     connection_url: mysql+pymysql://user:password@localhost/database
     pii_key_env: KEY
     pii:
@@ -560,7 +639,7 @@ servers:
     env = {"KEY": base64.b64encode(b"x" * 32).decode()}
 
     if valid:
-        assert load_config(path, env).servers["one"].access_level == "pii_safe"
+        assert load_config(path, env).servers["one"].access_level == "all_pii_safe"
     else:
         with pytest.raises(DomainError, match="CONFIG_ERROR"):
             load_config(path, env)
@@ -616,7 +695,7 @@ version: 1
 servers:
   legacy:
     engine: sqlserver
-    access_level: pii_safe
+    access_level: all_pii_safe
     connection_url: ${URL}
     pii_key_env: KEY
     pii: {rules: [{database: "*", schema: dbo, table: Users, columns: [Email]}]}
@@ -630,7 +709,7 @@ servers:
 @pytest.mark.parametrize(
     "server_fields",
     [
-        "access_level: pii_safe",
+        "access_level: all_pii_safe",
         "access_level: metadata\n    pii_key_env: KEY",
     ],
 )

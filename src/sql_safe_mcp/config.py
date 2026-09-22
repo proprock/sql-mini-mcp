@@ -106,7 +106,7 @@ class ServerConfigBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     engine: Literal["sqlserver", "mysql", "mariadb"]
-    access_level: Literal["metadata", "pii_safe"] = "metadata"
+    access_level: Literal["metadata", "meta_and_code", "all_pii_safe"] = "metadata"
     connection_url: SecretStr
     pii_key_env: str | None = Field(default=None, pattern=r"^[A-Z_][A-Z0-9_]*$")
     pii_key: SecretStr | None = Field(default=None, exclude=True)
@@ -137,13 +137,15 @@ class ServerConfig(ServerConfigBase):
 
     @model_validator(mode="after")
     def validate_security_shape(self) -> ServerConfig:
-        if self.access_level == "pii_safe":
+        if self.access_level == "all_pii_safe":
             if not self.pii_key_env or self.pii is None:
-                raise ValueError("pii_safe servers require pii_key_env and pii rules")
+                raise ValueError("all_pii_safe servers require pii_key_env and pii rules")
             if self.engine != "sqlserver" and any(rule.schema_ for rule in self.pii.rules):
                 raise ValueError(f"pii rules for engine {self.engine!r} cannot set schema")
         elif self.pii_key_env is not None or self.pii is not None:
-            raise ValueError("metadata servers cannot configure pii_key_env or pii rules")
+            raise ValueError(
+                f"{self.access_level} servers cannot configure pii_key_env or pii rules"
+            )
         return self
 
 
@@ -240,9 +242,11 @@ def _resolve_pii_rules(raw: dict[object, object], config: AppConfigInput) -> dic
     for alias, server in config.servers.items():
         server_data = servers[alias]
         assert isinstance(server_data, dict)
-        if server.access_level == "metadata":
+        if server.access_level != "all_pii_safe":
             if server.pii is not None:
-                raise ValueError("metadata servers cannot configure pii_key_env or pii rules")
+                raise ValueError(
+                    f"{server.access_level} servers cannot configure pii_key_env or pii rules"
+                )
             continue
 
         effective_rules = list(default_rules)

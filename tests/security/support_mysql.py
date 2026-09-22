@@ -53,7 +53,7 @@ def mysql_config(engine: str = "mysql") -> AppConfig:
     def server(key: bytes, key_env: str) -> dict[str, object]:
         return {
             "engine": engine,
-            "access_level": "pii_safe",
+            "access_level": "all_pii_safe",
             "connection_url": "mysql+pymysql://u:p@db/app",
             "pii_key_env": key_env,
             "pii_key": base64.b64encode(key).decode(),

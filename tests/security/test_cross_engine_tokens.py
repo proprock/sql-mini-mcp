@@ -34,7 +34,7 @@ def _server(alias: str) -> dict[str, Any]:
         rule["schema"] = "dbo"
     return {
         "engine": engine,
-        "access_level": "pii_safe",
+        "access_level": "all_pii_safe",
         "connection_url": URLS[engine],
         "pii_key_env": f"KEY_{alias.upper()}",
         "pii_key": base64.b64encode(KEYS[alias]).decode(),

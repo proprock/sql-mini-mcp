@@ -37,7 +37,7 @@ they remain an explicit local or externally managed disposable-database gate.
 Validate the example configuration after defining its documented environment variables:
 
 ```powershell
-uv run sql-safe-mcp --config sql-safe-mcp.example.yaml --check-config
+uv run sql-safe-mcp --config sql-safe-mcp.example-simple.yaml --check-config
 ```
 
 ### Milestone live gate

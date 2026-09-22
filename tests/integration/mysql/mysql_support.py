@@ -29,7 +29,7 @@ class LiveMySql:
     admin_url: URL
     config: AppConfig
     database: str
-    sql_config: AppConfig  # two pii_safe aliases with different keys over `sql_database`
+    sql_config: AppConfig  # two all_pii_safe aliases with different keys over `sql_database`
     sql_database: str
     logins: dict[str, tuple[str, str]]
     key: bytes
@@ -66,7 +66,7 @@ def build_sql_config(
         servers={
             alias: ServerConfig(
                 engine=engine,
-                access_level="pii_safe",
+                access_level="all_pii_safe",
                 connection_url=SecretStr(url.render_as_string(hide_password=False)),
                 pii_key_env=f"KEY_{alias.upper()}",
                 pii=PiiConfig(rules=[PiiRule(database="*", table="people", columns=["email"])]),

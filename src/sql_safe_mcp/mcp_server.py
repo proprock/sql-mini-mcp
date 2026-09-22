@@ -52,7 +52,7 @@ def create_server(config: AppConfig) -> MCPServer[AppContext]:
     server: MCPServer[AppContext] = MCPServer(
         "sql-safe-mcp",
         description="Minimal, read-only, PII-safe SQL database navigation.",
-        version="1.4.0",
+        version="1.5.0",
         lifespan=lifespan,
         log_level=config.logging.level,
     )
@@ -136,7 +136,7 @@ def create_server(config: AppConfig) -> MCPServer[AppContext]:
         ctx: Context[AppContext],
         max_rows: int | None = None,
     ) -> SqlResult:
-        """Run one restricted SELECT on a pii_safe server; protected columns return tokens."""
+        """Run one restricted SELECT on an all_pii_safe server; protected columns return tokens."""
         service = ctx.request_context.lifespan_context.service
         return await _domain_call(lambda: service.execute_sql(server, database, sql, max_rows))
 
