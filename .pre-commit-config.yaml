@@ -17,6 +17,12 @@ repos:
 
   - repo: local
     hooks:
+      - id: index-consistency
+        name: index consistency (staged snapshot)
+        entry: uv run python tools/check_precommit_snapshot.py
+        language: system
+        pass_filenames: false
+        always_run: true
       - id: ruff-format
         name: ruff format --check
         entry: uv run ruff format --check .
@@ -36,7 +42,7 @@ repos:
         types: [python]
         pass_filenames: false
       - id: unit-tests
-        name: unit tests
-        entry: uv run pytest tests/unit tests/contract
+        name: unit tests (staged snapshot)
+        entry: uv run pytest tests/unit tests/contract -q --tb=short
         language: system
         pass_filenames: false
