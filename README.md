@@ -228,6 +228,10 @@ only to stderr.
 
 can return a row such as `[42, "pii:v1:..."]`: the agent can follow the customer without reading
 the email address. A token is accepted only in `=` and `IN` predicates on the same server alias.
+If `FirstName` is protected, `SELECT FirstName FROM Users WHERE FirstName = 'Alice'` is rejected
+before it reaches the database. Filter protected columns only with authentic `pii:v1:...` tokens
+returned by `execute_sql` for the same alias; a matching prefix alone is not enough. Each token is
+authenticated and alias-bound, then validated and converted to a bound database value.
 Protection covers the columns you list, so list every column that holds personal data.
 
 ## Documentation
