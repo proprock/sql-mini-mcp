@@ -21,7 +21,7 @@ them and links the detail documents.
 
 ## Setup
 
-Requires Python 3.12+, [uv](https://docs.astral.sh/uv/), GNU Make, and Bash. Docker Compose and
+Requires Python 3.12–3.14, [uv](https://docs.astral.sh/uv/), GNU Make, and Bash. Docker Compose and
 OpenSSL are required for disposable database targets; Microsoft ODBC Driver 18 is also required
 for the SQL Server live tests.
 
@@ -94,6 +94,16 @@ make test-matrix
 Use `make db-up`, `make db-status`, `make db-logs`, and the explicit cleanup target `make db-down`
 when you need to manage the disposable containers without running tests. `make demo-seed` adds the
 synthetic SQL Server demo databases to a running SQL Server container.
+
+Use the native scripts directly when Make is not the desired entrypoint:
+
+```bash
+./scripts/seed-data --container <container-id> --reset
+```
+
+```powershell
+.\scripts\seed-data.ps1 -Container <container-id> -Reset
+```
 
 ## Architecture
 

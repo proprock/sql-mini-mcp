@@ -34,7 +34,8 @@ killed.
 
 - an adversarial corpus of 292 hostile statements (`tests/security/corpus`) that must fail with
   their expected code without reaching the database;
-- Hypothesis properties (`security-fast` on every run, `security-deep` before a milestone merge)
+- Hypothesis properties (`security-fast` on every milestone/release security gate,
+  `security-deep` before a milestone merge)
   covering forbidden constructs, formatting and alias invariance, lineage, token isolation and
   tamper resistance, and "only validated SQL is ever executed";
 - a MySQL/MariaDB corpus (`tests/security/corpus_mysql`) plus the T-SQL corpus replayed on the

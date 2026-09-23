@@ -8,6 +8,7 @@ from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp_types import ToolAnnotations
 
+from sql_safe_mcp import __version__
 from sql_safe_mcp.config import AppConfig
 from sql_safe_mcp.db.registry import EngineRegistry
 from sql_safe_mcp.diagnostics import configure_logging
@@ -29,7 +30,6 @@ READ_ONLY = ToolAnnotations(read_only_hint=True, open_world_hint=False)
 @dataclass(slots=True)
 class AppContext:
     service: DatabaseService
-    registry: EngineRegistry
 
 
 async def _domain_call[T](operation: Callable[[], Awaitable[T]]) -> T:
@@ -44,7 +44,7 @@ def create_server(config: AppConfig) -> MCPServer[AppContext]:
     async def lifespan(_server: MCPServer[AppContext]) -> AsyncIterator[AppContext]:
         registry = EngineRegistry(config)
         try:
-            yield AppContext(service=DatabaseService(config, registry), registry=registry)
+            yield AppContext(service=DatabaseService(config, registry))
         finally:
             registry.dispose()
 
@@ -52,7 +52,7 @@ def create_server(config: AppConfig) -> MCPServer[AppContext]:
     server: MCPServer[AppContext] = MCPServer(
         "sql-safe-mcp",
         description="Minimal, read-only, PII-safe SQL database navigation.",
-        version="1.5.0",
+        version=__version__,
         lifespan=lifespan,
         log_level=config.logging.level,
     )

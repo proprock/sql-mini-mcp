@@ -10,53 +10,40 @@ on:
         required: true
         type: choice
         default: main
-        options:
-          - main
-          - compat
-          - all
+        options: [main, compat, all]
       tag:
-        description: "Existing tag to build (for example, v1.2.0). Required for main and all; optional for compat"
+        description: "Existing tag to build (for example, v1.5.1). Required for main and all; optional for compat"
         required: false
         type: string
+      stage:
+        description: "Publish all steps, resume Registry after PyPI, or publish an already registered GitHub Release"
+        required: true
+        type: choice
+        default: full
+        options: [full, registry, github-release]
 
 permissions:
   contents: write
   id-token: write
 
 jobs:
-  release:
+  verify:
     if: github.event_name == 'push' || inputs.package == 'main' || inputs.package == 'all'
     runs-on: ubuntu-latest
-    environment: pypi
     env:
-      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
       - name: Require a tag for the main package
         if: github.event_name == 'workflow_dispatch'
-        env:
-          INPUT_TAG: ${{ inputs.tag }}
-        run: |
-          if [ -z "$INPUT_TAG" ]; then
-            echo "The tag input is required to publish the main package" >&2
-            exit 1
-          fi
-
+        run: test -n "${{ inputs.tag }}" || { echo "The tag input is required to publish the main package" >&2; exit 1; }
       - uses: actions/checkout@v7
         with:
           ref: ${{ env.RELEASE_TAG }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v10.1.0
-        with:
-          python-version: "3.12"
-
-      - name: uv sync
-        run: uv sync --all-groups --locked
-
-      - name: Build sdist and wheel
-        run: uv build
-
-      - name: Create synthetic configuration
+      - uses: astral-sh/setup-uv@v10.1.0
+        with: { python-version: "3.12" }
+      - run: uv sync --all-groups --locked
+      - run: uv build
+      - name: Verify clean package installs
         run: |
           cat > /tmp/sql-safe-mcp-config.yaml <<'EOF'
           version: 1
@@ -65,60 +52,102 @@ jobs:
               engine: sqlserver
               connection_url: mssql+pyodbc://user:password@host/master?driver=x
           EOF
-
-      - name: Verify sdist installs cleanly and validates configuration
-        run: |
-          python -m venv /tmp/verify-sdist
-          /tmp/verify-sdist/bin/pip install --quiet dist/*.tar.gz
-          /tmp/verify-sdist/bin/sql-safe-mcp --config /tmp/sql-safe-mcp-config.yaml --check-config
-
-      - name: Verify wheel installs cleanly and validates configuration
-        run: |
-          python -m venv /tmp/verify-wheel
-          /tmp/verify-wheel/bin/pip install --quiet dist/*.whl
-          /tmp/verify-wheel/bin/sql-safe-mcp --config /tmp/sql-safe-mcp-config.yaml --check-config
-
-      - name: Verify release version metadata
+          for kind in sdist wheel; do
+            python -m venv "/tmp/verify-$kind"
+            "/tmp/verify-$kind/bin/pip" install --quiet dist/*.$([ "$kind" = sdist ] && echo tar.gz || echo whl)
+            "/tmp/verify-$kind/bin/sql-safe-mcp" --config /tmp/sql-safe-mcp-config.yaml --check-config
+          done
+      - name: Verify release metadata
         run: |
           VERSION="${RELEASE_TAG#v}"
-          PACKAGE_VERSION="$(uv run python -c 'from importlib.metadata import version; print(version("sql-safe-mcp"))')"
-          if [ "$VERSION" != "$PACKAGE_VERSION" ]; then
-            echo "Release tag $RELEASE_TAG does not match package version $PACKAGE_VERSION" >&2
-            exit 1
-          fi
-          jq --arg version "$VERSION" \
-            '(.version, .packages[].version) = $version' \
-            server.json > release-server.json
-
-      - name: Install mcp-publisher
+          test "$VERSION" = "$(uv run python -c 'from importlib.metadata import version; print(version("sql-safe-mcp"))')"
+          jq --arg version "$VERSION" '(.version, .packages[].version) = $version' server.json > release-server.json
+      - name: Install and validate mcp-publisher
         run: |
           curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+          ./mcp-publisher validate release-server.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: main-release-artifacts
+          path: |
+            dist/*.tar.gz
+            dist/*.whl
+            release-server.json
+          if-no-files-found: error
 
-      - name: Validate MCP Registry metadata
-        run: ./mcp-publisher validate release-server.json
+  draft_release:
+    needs: verify
+    if: >-
+      ${{ always() && needs.verify.result == 'success' &&
+      (github.event_name == 'push' || inputs.stage == 'full' || inputs.stage == 'registry' || inputs.stage == 'github-release') }}
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: main-release-artifacts, path: dist }
+      - name: Create or verify the GitHub Release draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if draft="$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft 2>/dev/null)"; then
+            test "$draft" = true || { echo "GitHub Release $RELEASE_TAG already exists and is not a draft." >&2; exit 1; }
+          else
+            gh release create "$RELEASE_TAG" dist/* --draft --title "$RELEASE_TAG"
+          fi
 
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+  publish_pypi:
+    needs: draft_release
+    if: ${{ needs.draft_release.result == 'success' && (github.event_name == 'push' || inputs.stage == 'full') }}
+    runs-on: ubuntu-latest
+    environment: pypi
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: main-release-artifacts, path: dist }
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with: { packages-dir: dist/ }
 
-      - name: Authenticate to MCP Registry
-        run: ./mcp-publisher login github-oidc
+  publish_registry:
+    needs: [draft_release, publish_pypi]
+    if: >-
+      ${{ always() && needs.draft_release.result == 'success' &&
+      (github.event_name == 'push' || inputs.stage == 'full' || inputs.stage == 'registry') &&
+      (needs.publish_pypi.result == 'success' || needs.publish_pypi.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+    steps:
+      - name: Confirm PyPI publication before resume
+        if: github.event_name == 'workflow_dispatch' && inputs.stage == 'registry'
+        run: curl --fail --silent --show-error "https://pypi.org/pypi/sql-safe-mcp/${RELEASE_TAG#v}/json" > /dev/null
+      - uses: actions/download-artifact@v4
+        with: { name: main-release-artifacts, path: release-artifacts }
+      - name: Install and publish mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish release-artifacts/release-server.json
 
-      - name: Publish server to MCP Registry
-        run: ./mcp-publisher publish release-server.json
-
-      - name: Create GitHub Release
+  publish_github_release:
+    needs: [draft_release, publish_registry]
+    if: >-
+      ${{ always() && needs.draft_release.result == 'success' &&
+      (github.event_name == 'push' || inputs.stage == 'full' || inputs.stage == 'github-release') &&
+      (needs.publish_registry.result == 'success' || needs.publish_registry.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+      - name: Publish the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${RELEASE_TAG#v}"
-          awk -v version="$VERSION" '
-            /^## \[/ { in_section = index($0, "## [" version "]") == 1; next }
-            in_section
-          ' CHANGELOG.md > release-notes.md
-          if ! grep -q '[^[:space:]]' release-notes.md; then
-            echo "CHANGELOG.md has no entry for $VERSION" >&2
-            exit 1
-          fi
+          awk -v version="$VERSION" '/^## \[/ { in_section = index($0, "## [" version "]") == 1; next } in_section' CHANGELOG.md > release-notes.md
+          grep -q '[^[:space:]]' release-notes.md || { echo "CHANGELOG.md has no entry for $VERSION" >&2; exit 1; }
           cat >> release-notes.md <<EOF
 
           Install and run directly from this tag:
@@ -126,47 +155,27 @@ jobs:
 
           See README.md for configuration and usage.
           EOF
-          gh release create "${RELEASE_TAG}" dist/*.whl dist/*.tar.gz \
-            --title "${RELEASE_TAG}" \
-            --notes-file release-notes.md
+          gh release edit "$RELEASE_TAG" --draft=false --title "$RELEASE_TAG" --notes-file release-notes.md
 
-  # Deprecated sql-mini-mcp shim (compat/sql-mini-mcp) that depends on sql-safe-mcp. A pushed tag
-  # never publishes it; run this workflow manually with package compat (or all).
   compat:
-    needs: release
+    needs: publish_github_release
     if: >-
-      ${{ !cancelled()
-      && github.event_name == 'workflow_dispatch'
-      && (inputs.package == 'compat' || inputs.package == 'all')
-      && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
+      ${{ !cancelled() && github.event_name == 'workflow_dispatch' &&
+      (inputs.package == 'compat' || inputs.package == 'all') &&
+      (needs.publish_github_release.result == 'success' || needs.publish_github_release.result == 'skipped') }}
     runs-on: ubuntu-latest
     environment: pypi
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v10.1.0
-        with:
-          python-version: "3.12"
-
-      - name: Build sdist and wheel
-        run: uv build compat/sql-mini-mcp --out-dir dist-compat
-
+      - uses: astral-sh/setup-uv@v10.1.0
+        with: { python-version: "3.12" }
+      - run: uv build compat/sql-mini-mcp --out-dir dist-compat
       - name: Verify the wheel depends on sql-safe-mcp
         run: |
           python -m venv /tmp/verify-compat
           /tmp/verify-compat/bin/pip install --quiet --no-deps dist-compat/*.whl
-          /tmp/verify-compat/bin/python - <<'PY'
-          from importlib.metadata import requires, version
-
-          dependencies = requires("sql-mini-mcp") or []
-          assert any(item.replace(" ", "").startswith("sql-safe-mcp>=") for item in dependencies), dependencies
-          print(version("sql-mini-mcp"), dependencies)
-          PY
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist-compat/
+          /tmp/verify-compat/bin/python -c 'from importlib.metadata import requires; assert any(item.replace(" ", "").startswith("sql-safe-mcp>=") for item in (requires("sql-mini-mcp") or []))'
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with: { packages-dir: dist-compat/ }

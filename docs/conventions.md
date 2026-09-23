@@ -1,6 +1,6 @@
 # Conventions
 
-- Python 3.12+, `src/` layout, Pydantic v2 models, explicit return types.
+- Python 3.12–3.14, `src/` layout, Pydantic v2 models, explicit return types.
 - Prefer small, explicit modules and existing dependencies. Do not introduce a dependency or an
   abstraction for speculative functionality or an unmeasured startup-time micro-optimization.
 - Domain code raises `DomainError`; MCP handlers translate it to `ToolError`.
