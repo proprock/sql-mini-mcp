@@ -31,7 +31,7 @@ Prefer explicit code, small public APIs, stable schemas, and compatibility over 
 speculative functionality and trivial new dependencies.
 
 Use `feature/` branches. Write a focused failing test before each behavior change. Keep commits
-small and use Conventional Commit subjects. Fast checks run for every task. The live SQL Server suite
+small and use Conventional Commit subjects. The commit/PR fast gate runs for every task. The live SQL Server suite
 is mandatory before a milestone is closed or merged, and during any task that changes SQL
 generation, execution, result encoding, or reflection (see the milestone live gate in
 [checks.md](checks.md)). Deep security checks run before merging the corresponding milestone.
@@ -66,7 +66,12 @@ is left to create:
   `src/sql_safe_mcp/__init__.py`, the server version in `src/sql_safe_mcp/mcp_server.py`, and the
   assertions in `tests/unit/test_version.py`, then run `uv lock`;
 - update README and documentation status notes and pinned-version examples;
-- run the fast suite, the milestone live gate, and the prek hooks on that final state.
+- run the commit/PR fast gate, the milestone/release security gate, and the prek hooks on that final state.
+
+The release workflow creates a GitHub Release draft before publishing to PyPI and the MCP Registry.
+If a downstream publication fails, rerun the failed job and its blocked downstream jobs. Use the
+manual `registry` stage only after confirming the package version exists on PyPI; use
+`github-release` only after confirming Registry publication. Neither recovery path republishes PyPI.
 
 The tag itself is created and pushed only on the maintainer's explicit instruction after the merge,
 and only from the merged commit on `master`.

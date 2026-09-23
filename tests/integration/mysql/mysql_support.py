@@ -45,6 +45,7 @@ def build_config(
         servers={
             alias: ServerConfig(
                 engine=engine,
+                access_level="meta_and_code" if alias in {"app", "hidden"} else "metadata",
                 connection_url=SecretStr(
                     admin_url.set(
                         username=login, password=password, database=database

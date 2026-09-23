@@ -7,6 +7,18 @@ categories `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, and `Security`.
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-09-23
+
+### Fixed
+
+- Malformed `connection_url` values now return a sanitized `CONFIG_ERROR` instead of an unhandled
+  traceback. DBAPI errors now prefer supported SQLSTATE and native error codes over driver text.
+
+### Security
+
+- The Bash and PowerShell demo seeding scripts reject reader-password characters unsafe for their
+  SQL command boundary.
+
 ## [1.5.0] - 2026-09-22
 
 ### Changed

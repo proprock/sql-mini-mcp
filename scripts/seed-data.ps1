@@ -14,6 +14,11 @@ $remoteFile = "/tmp/seed-demo.sql"
 # Windows PowerShell 5.1 drops bare double quotes in native arguments, so they are escaped as \".
 $sqlcmd = '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b'
 
+if ($ReaderPassword -notmatch '^[A-Za-z0-9!._-]+$') {
+    [Console]::Error.WriteLine("Reader password contains unsupported characters.")
+    exit 2
+}
+
 docker info *> $null
 if ($LASTEXITCODE -ne 0) {
     throw "Docker daemon is not ready. Start Docker Desktop and retry."

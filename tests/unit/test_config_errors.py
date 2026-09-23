@@ -66,6 +66,18 @@ def test_unresolvable_placeholder_is_rejected(tmp_path: Path) -> None:
     )
 
 
+def test_malformed_connection_url_is_a_sanitized_config_error(tmp_path: Path) -> None:
+    secret = "url-secret-marker"
+
+    error = _error(_write(tmp_path, _yaml(f"'not a URL {secret}'")))
+
+    assert error.public_message == (
+        "Invalid configuration: servers.s: Value error, "
+        "connection_url must be a valid SQLAlchemy URL"
+    )
+    assert secret not in str(error)
+
+
 def test_special_characters_in_embedded_values_are_encoded(tmp_path: Path) -> None:
     path = _write(tmp_path, _yaml("mssql+pyodbc://u:${P}@h/d?driver=x"))
     config = load_config(path, {"P": "Xa/b c@d?e#f%g&h=i+j"})

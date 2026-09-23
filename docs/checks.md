@@ -1,5 +1,7 @@
 # Checks
 
+## Commit/PR fast gate
+
 On Linux and macOS, use GNU Make as the primary development interface. It requires GNU Make,
 Bash, `uv`, and (for database targets) Docker Compose and OpenSSL:
 
@@ -46,7 +48,7 @@ Coverage does not replace behavioral assertions. Review the missing-line report,
 tests or document an intentional exclusion, and report the result. Do not state that any check
 passed unless it was executed.
 
-GitHub Actions runs this fast suite on supported Python versions and builds both distribution
+GitHub Actions runs this commit/PR fast gate on supported Python versions and builds both distribution
 formats in a clean environment. Docker-backed SQL Server integration tests never run in hosted CI;
 they remain an explicit local or externally managed disposable-database gate.
 
@@ -59,7 +61,7 @@ make config-check CONFIG=sql-safe-mcp.example-simple.yaml
 uv run sql-safe-mcp --config sql-safe-mcp.example-simple.yaml --check-config
 ```
 
-### Milestone live gate
+## Milestone/release security gate
 
 Per-task work runs the fast suite. A milestone is not closed, marked accepted in the roadmap, or
 merged until the live suite also passes against the running SQL Server container with zero skips:
@@ -163,8 +165,8 @@ make db-down-mysql
 without running tests. `make demo-seed` fills the running SQL Server container with the synthetic
 demo databases; use `DEMO_ARGS="--reset"` to recreate them.
 
-The security suite lives in `tests/security` and runs with the fast suite. Add it explicitly when
-running a subset:
+The security suite is separate from the commit/PR fast gate. Run it for a milestone/release
+security gate, and add it explicitly when running a subset:
 
 ```bash
 make security
@@ -175,7 +177,7 @@ uv run pytest tests/unit tests/contract tests/security -q
 
 ### Security gates (Milestone 2B)
 
-The fast suite includes the adversarial corpus (`tests/security/corpus/*.yaml`, every case must
+The security gate includes the adversarial corpus (`tests/security/corpus/*.yaml`, every case must
 fail with its expected code and never reach the database) and the Hypothesis properties under the
 deterministic `security-fast` profile (about 200 examples per property).
 

@@ -3,11 +3,29 @@ from importlib.metadata import version
 from pathlib import Path
 
 from sql_safe_mcp import __version__
+from sql_safe_mcp.config import AppConfig, ServerConfig
+from sql_safe_mcp.mcp_server import create_server
 
 
 def test_distribution_and_runtime_versions_match_release() -> None:
-    assert __version__ == "1.5.0"
-    assert version("sql-safe-mcp") == "1.5.0"
+    assert __version__ == "1.5.1"
+    assert version("sql-safe-mcp") == "1.5.1"
+
+
+def test_mcp_server_version_uses_the_runtime_version() -> None:
+    server = create_server(
+        AppConfig(
+            version=1,
+            servers={
+                "s": ServerConfig(
+                    engine="sqlserver",
+                    connection_url="mssql+pyodbc://u:p@sql/master?driver=x",
+                )
+            },
+        )
+    )
+
+    assert server.version == __version__
 
 
 def test_mcp_registry_metadata_matches_the_distribution() -> None:
