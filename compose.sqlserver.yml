@@ -1,3 +1,4 @@
+name: sql-safe-mcp-sqlserver
 services:
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest@sha256:ba4c8329f48fb8f02e1416be6a930ebfd71268caee78aa985f3af4315e457c89
