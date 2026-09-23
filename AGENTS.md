@@ -11,7 +11,12 @@ Read `docs/architecture.md` before changing public contracts or security boundar
 - If, after relevant investigation, the goal, scope, compatibility, security impact, data
   handling, behavior, or implementation choice is unclear, stop and ask the user for a decision
   before making a change. Do not resolve an ambiguity by assumption.
-- Use TDD: add or update a failing focused test, implement minimally, then run the relevant suite.
+- Use TDD: add or update a failing focused test, implement minimally, then run only checks that
+  validate the changed surface. Do not use an unrelated broader suite as a generic confidence
+  check: documentation needs diff hygiene; CI/workflow changes need configuration or static
+  contract validation and syntax/action linting. Run an extended application suite only when a
+  change affects application code, package inputs, or the workflow commands or conditions that
+  select that suite.
 - Use SQLAlchemy Core and Inspector only; do not add an ORM.
 - Treat MCP arguments, SQL, database metadata, rows, and PII tokens as untrusted input.
 - Security decisions are allowlists. Unknown SQL AST nodes and unresolved lineage fail closed.
