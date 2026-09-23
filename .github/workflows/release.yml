@@ -89,6 +89,7 @@ jobs:
       - name: Create or verify the GitHub Release draft
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           if draft="$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft 2>/dev/null)"; then
             test "$draft" = true || { echo "GitHub Release $RELEASE_TAG already exists and is not a draft." >&2; exit 1; }
