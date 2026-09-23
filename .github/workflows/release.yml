@@ -85,7 +85,7 @@ jobs:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
       - uses: actions/download-artifact@v4
-        with: { name: main-release-artifacts, path: dist }
+        with: { name: main-release-artifacts, path: release-artifacts }
       - name: Create or verify the GitHub Release draft
         env:
           GH_TOKEN: ${{ github.token }}
@@ -94,8 +94,9 @@ jobs:
           if draft="$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft 2>/dev/null)"; then
             test "$draft" = true || { echo "GitHub Release $RELEASE_TAG already exists and is not a draft." >&2; exit 1; }
           else
-            gh release create "$RELEASE_TAG" dist/* --draft --title "$RELEASE_TAG"
+            gh release create "$RELEASE_TAG" --draft --title "$RELEASE_TAG"
           fi
+          gh release upload "$RELEASE_TAG" release-artifacts/dist/* --clobber
 
   publish_pypi:
     needs: draft_release
@@ -104,9 +105,9 @@ jobs:
     environment: pypi
     steps:
       - uses: actions/download-artifact@v4
-        with: { name: main-release-artifacts, path: dist }
+        with: { name: main-release-artifacts, path: release-artifacts }
       - uses: pypa/gh-action-pypi-publish@release/v1
-        with: { packages-dir: dist/ }
+        with: { packages-dir: release-artifacts/dist/ }
 
   publish_registry:
     needs: [draft_release, publish_pypi]
