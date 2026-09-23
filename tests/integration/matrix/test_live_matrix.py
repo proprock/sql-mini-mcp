@@ -38,7 +38,9 @@ class EngineCase:
     sql_database: str
     table: str  # metadata table name
     schema: str | None
+    issue_query: str  # deterministic projection that returns two PII tokens
     query: str  # execute_sql text with {token}
+    in_query: str  # execute_sql text with {first} and {second}
     email: str
 
 
@@ -53,7 +55,11 @@ def _cases(mssql: LiveDatabase, mysql: LiveMySql, maria: LiveMySql) -> list[Engi
             mssql.database,
             "Users",
             mssql.alpha_schema,
+            f"SELECT Email AS Contact FROM [{mssql.alpha_schema}].[Users] "
+            "WHERE TenantId = 1 AND Id IN (1, 2) ORDER BY Id",
             f"SELECT Id FROM [{mssql.alpha_schema}].[Users] WHERE Email = '{{token}}'",
+            f"SELECT Id FROM [{mssql.alpha_schema}].[Users] "
+            "WHERE Email IN ('{first}', '{second}') ORDER BY Id",
             mssql.emails[0],
         )
     ]
@@ -68,7 +74,9 @@ def _cases(mssql: LiveDatabase, mysql: LiveMySql, maria: LiveMySql) -> list[Engi
                 live.sql_database,
                 "users",
                 None,
+                "SELECT email AS contact FROM people WHERE id IN (1, 2) ORDER BY id",
                 "SELECT id FROM people WHERE email = '{token}'",
+                "SELECT id FROM people WHERE email IN ('{first}', '{second}') ORDER BY id",
                 "a@example.com",
             )
         )
@@ -206,6 +214,77 @@ def test_same_public_contract_and_token_isolation_on_three_engines(
                         assert "INVALID_PII_TOKEN" in _text(bad)
                         failures.add(_text(bad))
             assert len(failures) == 1, failures
+
+    asyncio.run(scenario())
+
+
+def test_returned_tokens_round_trip_and_are_alias_bound_on_three_engines(
+    live_database: LiveDatabase,
+    live_mysql_only: LiveMySql,
+    live_mariadb_only: LiveMySql,
+) -> None:
+    cases = _cases(live_database, live_mysql_only, live_mariadb_only)
+    config = _combined(live_database, live_mysql_only, live_mariadb_only)
+
+    async def scenario() -> None:
+        async with Client(create_server(config), raise_exceptions=True) as client:
+            issued: dict[str, str] = {}
+            for case in cases:
+                first = await client.call_tool(
+                    "execute_sql",
+                    {
+                        "server": case.secure,
+                        "database": case.sql_database,
+                        "sql": case.issue_query,
+                    },
+                )
+                assert first.is_error is False, _text(first)
+                payload = first.structured_content
+                assert payload["columns"][0]["name"].casefold() == "contact"
+                assert payload["columns"][0]["source"]["column"].casefold() == "email"
+                tokens = [row[0] for row in payload["rows"]]
+                assert len(tokens) == 2
+                assert all(
+                    isinstance(token, str) and token.startswith("pii:v1:") for token in tokens
+                )
+
+                equality = await client.call_tool(
+                    "execute_sql",
+                    {
+                        "server": case.secure,
+                        "database": case.sql_database,
+                        "sql": case.query.format(token=tokens[0]),
+                    },
+                )
+                assert equality.is_error is False, _text(equality)
+                assert equality.structured_content["rows"] == [[1]]
+
+                membership = await client.call_tool(
+                    "execute_sql",
+                    {
+                        "server": case.secure,
+                        "database": case.sql_database,
+                        "sql": case.in_query.format(first=tokens[0], second=tokens[1]),
+                    },
+                )
+                assert membership.is_error is False, _text(membership)
+                assert membership.structured_content["rows"] == [[1], [2]]
+                issued[case.secure] = tokens[0]
+
+            for target in cases:
+                for source in cases:
+                    if source is target:
+                        continue
+                    result = await client.call_tool(
+                        "execute_sql",
+                        {
+                            "server": target.secure,
+                            "database": target.sql_database,
+                            "sql": target.query.format(token=issued[source.secure]),
+                        },
+                    )
+                    assert result.is_error is True
+                    assert "INVALID_PII_TOKEN" in _text(result)
 
     asyncio.run(scenario())
 

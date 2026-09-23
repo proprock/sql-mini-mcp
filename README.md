@@ -227,9 +227,8 @@ only to stderr.
 ```
 
 can return a row such as `[42, "pii:v1:..."]`: the agent can follow the customer without reading
-the email address. A token is accepted only in `=` and `IN` predicates on the same protected column
-and server alias. Protection covers the columns you list, so list every column that holds personal
-data.
+the email address. A token is accepted only in `=` and `IN` predicates on the same server alias.
+Protection covers the columns you list, so list every column that holds personal data.
 
 ## Documentation
 
