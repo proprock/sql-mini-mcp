@@ -184,12 +184,14 @@ def live_database() -> Iterator[LiveDatabase]:
                 ),
                 "legacy": ServerConfig(
                     engine="sqlserver",
+                    access_level="meta_and_code",
                     connection_url=SecretStr(
                         _url_for(admin_url, app_login, app_password, "master")
                     ),
                 ),
                 "hidden": ServerConfig(
                     engine="sqlserver",
+                    access_level="meta_and_code",
                     connection_url=SecretStr(
                         _url_for(admin_url, hidden_login, hidden_password, "master")
                     ),

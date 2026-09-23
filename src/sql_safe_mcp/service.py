@@ -74,8 +74,10 @@ def _driver_codes(exc: DBAPIError) -> tuple[frozenset[str], frozenset[int]]:
     sqlstates: set[str] = set()
     native_codes: set[int] = set()
     for value in getattr(exc.orig, "args", ()):
-        if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9]{5}", value):
-            sqlstates.add(value.upper())
+        if isinstance(value, str):
+            if re.fullmatch(r"[A-Za-z0-9]{5}", value):
+                sqlstates.add(value.upper())
+            native_codes.update(int(code) for code in re.findall(r"\((-?\d+)\)", value))
         elif isinstance(value, int) and not isinstance(value, bool):
             native_codes.add(value)
     return frozenset(sqlstates), frozenset(native_codes)
@@ -85,10 +87,10 @@ def _classify_dbapi_error(exc: DBAPIError) -> DomainError | None:
     sqlstates, native_codes = _driver_codes(exc)
     if sqlstates & _TIMEOUT_SQLSTATES or native_codes & _TIMEOUT_NATIVE_CODES:
         return _timeout_error()
-    if sqlstates & _ACCESS_DENIED_SQLSTATES or native_codes & _ACCESS_DENIED_NATIVE_CODES:
-        return DomainError(ErrorCode.ACCESS_DENIED, "The database denied this operation.")
     if sqlstates & _CONNECTION_SQLSTATES or native_codes & _CONNECTION_NATIVE_CODES:
         return _connection_error()
+    if sqlstates & _ACCESS_DENIED_SQLSTATES or native_codes & _ACCESS_DENIED_NATIVE_CODES:
+        return DomainError(ErrorCode.ACCESS_DENIED, "The database denied this operation.")
 
     message = str(exc.orig).casefold()
     if any(value in message for value in ("timeout", "timed out", "hyt00", "hyt01")):

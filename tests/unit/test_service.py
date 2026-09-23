@@ -283,6 +283,27 @@ def test_database_failure_codes_do_not_depend_on_driver_language(
     asyncio.run(scenario())
 
 
+def test_connection_code_takes_precedence_over_access_denied_codes() -> None:
+    service = _service(
+        DBAPIError(
+            "SELECT secret",
+            {"password": "hidden"},
+            _OdbcFailure(
+                "28000",
+                "Login failed for user. (18456); Cannot open database requested by the login. "
+                "(4060)",
+            ),
+        )
+    )
+
+    async def scenario() -> None:
+        with pytest.raises(DomainError) as raised:
+            await service.list_databases("Alpha")
+        assert raised.value.code is ErrorCode.CONNECTION_FAILED
+
+    asyncio.run(scenario())
+
+
 def test_unstructured_denied_text_is_not_misclassified_as_access_denied() -> None:
     service = _service(
         DBAPIError("SELECT secret", {"password": "hidden"}, Exception("unrelated denied value"))
