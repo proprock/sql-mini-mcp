@@ -252,6 +252,50 @@ def test_database_failures_map_to_stable_public_codes(
     asyncio.run(scenario())
 
 
+class _OdbcFailure(Exception):
+    """Shaped like pyodbc.Error: args are (sqlstate, message)."""
+
+
+class _PyMySqlFailure(Exception):
+    """Shaped like a PyMySQL DBAPI exception: args are (native_code, message)."""
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected"),
+    [
+        (_OdbcFailure("HYT00", "localized error"), ErrorCode.TIMEOUT),
+        (_OdbcFailure("08004", "localized error"), ErrorCode.CONNECTION_FAILED),
+        (_OdbcFailure("28000", "localized error"), ErrorCode.ACCESS_DENIED),
+        (_PyMySqlFailure(1044, "localized error"), ErrorCode.ACCESS_DENIED),
+        (_PyMySqlFailure(1049, "localized error"), ErrorCode.CONNECTION_FAILED),
+    ],
+)
+def test_database_failure_codes_do_not_depend_on_driver_language(
+    failure: BaseException, expected: ErrorCode
+) -> None:
+    service = _service(DBAPIError("SELECT secret", {"password": "hidden"}, failure))
+
+    async def scenario() -> None:
+        with pytest.raises(DomainError) as raised:
+            await service.list_databases("Alpha")
+        assert raised.value.code is expected
+
+    asyncio.run(scenario())
+
+
+def test_unstructured_denied_text_is_not_misclassified_as_access_denied() -> None:
+    service = _service(
+        DBAPIError("SELECT secret", {"password": "hidden"}, Exception("unrelated denied value"))
+    )
+
+    async def scenario() -> None:
+        with pytest.raises(DomainError) as raised:
+            await service.list_databases("Alpha")
+        assert raised.value.code is ErrorCode.DATABASE_ERROR
+
+    asyncio.run(scenario())
+
+
 def test_unexpected_failure_logs_only_generic_context_and_correlation_id(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -284,10 +328,6 @@ def test_ambiguous_table_candidates_omit_null_schema() -> None:
     assert raised.value.code is ErrorCode.AMBIGUOUS_OBJECT
     assert "None" not in str(raised.value)
     assert "Users" in str(raised.value)
-
-
-class _OdbcFailure(Exception):
-    """Shaped like pyodbc.Error: args are (sqlstate, message)."""
 
 
 def _login_timeout() -> OperationalError:

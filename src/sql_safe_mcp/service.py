@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from collections.abc import Callable
 from typing import TypeVar
@@ -42,6 +43,12 @@ logger = logging.getLogger(__name__)
 CatalogFactory = Callable[[Connection, str, str], TableCatalog]
 _SCHEMA_CACHE_ENTRIES = 1024
 _SCHEMA_CACHE_TTL_SECONDS = 300.0
+_TIMEOUT_SQLSTATES = frozenset({"HYT00", "HYT01"})
+_CONNECTION_SQLSTATES = frozenset({"08001", "08004"})
+_ACCESS_DENIED_SQLSTATES = frozenset({"28000"})
+_TIMEOUT_NATIVE_CODES = frozenset({-2})
+_CONNECTION_NATIVE_CODES = frozenset({1049, 2003, 4060})
+_ACCESS_DENIED_NATIVE_CODES = frozenset({229, 1044, 1045, 18456})
 T = TypeVar("T")
 
 
@@ -61,6 +68,46 @@ def _connection_error() -> DomainError:
         retryable=True,
         correlation_id=uuid4().hex,
     )
+
+
+def _driver_codes(exc: DBAPIError) -> tuple[frozenset[str], frozenset[int]]:
+    sqlstates: set[str] = set()
+    native_codes: set[int] = set()
+    for value in getattr(exc.orig, "args", ()):
+        if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9]{5}", value):
+            sqlstates.add(value.upper())
+        elif isinstance(value, int) and not isinstance(value, bool):
+            native_codes.add(value)
+    return frozenset(sqlstates), frozenset(native_codes)
+
+
+def _classify_dbapi_error(exc: DBAPIError) -> DomainError | None:
+    sqlstates, native_codes = _driver_codes(exc)
+    if sqlstates & _TIMEOUT_SQLSTATES or native_codes & _TIMEOUT_NATIVE_CODES:
+        return _timeout_error()
+    if sqlstates & _ACCESS_DENIED_SQLSTATES or native_codes & _ACCESS_DENIED_NATIVE_CODES:
+        return DomainError(ErrorCode.ACCESS_DENIED, "The database denied this operation.")
+    if sqlstates & _CONNECTION_SQLSTATES or native_codes & _CONNECTION_NATIVE_CODES:
+        return _connection_error()
+
+    message = str(exc.orig).casefold()
+    if any(value in message for value in ("timeout", "timed out", "hyt00", "hyt01")):
+        return _timeout_error()
+    if any(
+        value in message
+        for value in (
+            "permission denied",
+            "permission was denied",
+            "access denied",
+            "not authorized",
+        )
+    ):
+        return DomainError(ErrorCode.ACCESS_DENIED, "The database denied this operation.")
+    if any(
+        value in message for value in ("cannot open database", "(4060)", "08001", "08004")
+    ) or isinstance(exc, OperationalError):
+        return _connection_error()
+    return None
 
 
 def _contains(value: str, needle: str | None) -> bool:
@@ -158,25 +205,8 @@ class DatabaseService:
         except SQLAlchemyTimeoutError as exc:
             raise self._classified(alias, database, operation_name, _timeout_error(), exc) from exc
         except DBAPIError as exc:
-            message = str(exc.orig).casefold()
-            if any(value in message for value in ("timeout", "timed out", "hyt00", "hyt01")):
-                raise self._classified(
-                    alias, database, operation_name, _timeout_error(), exc
-                ) from exc
-            if any(value in message for value in ("permission", "denied", "not authorized")):
-                raise self._classified(
-                    alias,
-                    database,
-                    operation_name,
-                    DomainError(ErrorCode.ACCESS_DENIED, "The database denied this operation."),
-                    exc,
-                ) from exc
-            if any(
-                value in message for value in ("cannot open database", "(4060)", "08001", "08004")
-            ) or isinstance(exc, OperationalError):
-                raise self._classified(
-                    alias, database, operation_name, _connection_error(), exc
-                ) from exc
+            if error := _classify_dbapi_error(exc):
+                raise self._classified(alias, database, operation_name, error, exc) from exc
             raise self._unexpected(
                 "Database operation failed", alias, database, operation_name, exc
             ) from exc

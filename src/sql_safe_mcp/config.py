@@ -13,6 +13,7 @@ from urllib.parse import quote
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError, model_validator
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError
 
 from sql_safe_mcp.errors import DomainError, ErrorCode
 
@@ -113,7 +114,10 @@ class ServerConfigBase(BaseModel):
 
     @model_validator(mode="after")
     def validate_connection_url(self) -> ServerConfigBase:
-        url = make_url(self.connection_url.get_secret_value())
+        try:
+            url = make_url(self.connection_url.get_secret_value())
+        except ArgumentError as exc:
+            raise ValueError("connection_url must be a valid SQLAlchemy URL") from exc
         if url.host and _PERCENT_ESCAPE.search(url.host):
             raise ValueError(
                 "connection_url host contains an encoded character; a ${NAME} placeholder inside "

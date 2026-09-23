@@ -94,3 +94,25 @@ def test_invalid_config_returns_two_without_traceback_or_secret(tmp_path: Path) 
     assert "Traceback" not in result.stderr
     assert secret not in result.stderr
     assert "password" not in result.stderr
+
+
+def test_malformed_connection_url_returns_two_without_traceback_or_secret(tmp_path: Path) -> None:
+    secret = "cli-url-secret-marker"
+    config = tmp_path / "malformed-url.yaml"
+    config.write_text(
+        f"""
+version: 1
+servers:
+  legacy:
+    engine: sqlserver
+    connection_url: 'not a URL {secret}'
+""",
+        encoding="utf-8",
+    )
+
+    result = _run("--config", str(config), "--check-config")
+
+    assert result.returncode == 2
+    assert "[CONFIG_ERROR]" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert secret not in result.stderr
