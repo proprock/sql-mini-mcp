@@ -183,6 +183,88 @@ def test_live_safe_error_and_permission_paths(live_database: LiveDatabase) -> No
     asyncio.run(scenario())
 
 
+def test_live_partially_scoped_login(live_database: LiveDatabase) -> None:
+    async def scenario() -> None:
+        async with Client(create_server(live_database.config), raise_exceptions=True) as client:
+            visible = await client.call_tool(
+                "list_databases",
+                {"server": "hidden", "name_contains": live_database.database},
+            )
+            assert visible.structured_content == {"databases": [{"name": live_database.database}]}
+            outside = await client.call_tool(
+                "list_databases",
+                {"server": "hidden", "name_contains": live_database.restricted_database},
+            )
+            assert outside.structured_content == {"databases": []}
+
+            tables = await client.call_tool(
+                "list_tables", {"server": "hidden", "database": live_database.database}
+            )
+            names = {(item["schema"], item["name"]) for item in tables.structured_content["tables"]}
+            assert names == {(live_database.alpha_schema, "ScopedVisible")}
+
+            for table, expected_error in (
+                ("ScopedVisible", False),
+                ("Canary", True),
+                ("MissingTable", True),
+            ):
+                result = await client.call_tool(
+                    "get_table_definition",
+                    {
+                        "server": "hidden",
+                        "database": live_database.database,
+                        "schema": live_database.alpha_schema,
+                        "table": table,
+                    },
+                )
+                assert result.is_error is expected_error
+                if expected_error:
+                    content = result.content[0]
+                    assert isinstance(content, TextContent)
+                    assert "[NOT_FOUND]" in content.text
+                else:
+                    assert result.structured_content["name"] == "ScopedVisible"
+
+            procedures = await client.call_tool(
+                "list_stored_procedures",
+                {"server": "hidden", "database": live_database.database},
+            )
+            procedure_names = {
+                item["name"] for item in procedures.structured_content["stored_procedures"]
+            }
+            assert "HiddenProc" in procedure_names
+            assert "VisibleProc" not in procedure_names
+            inaccessible_procedure = await client.call_tool(
+                "get_stored_procedure",
+                {
+                    "server": "hidden",
+                    "database": live_database.database,
+                    "schema": live_database.alpha_schema,
+                    "name": "VisibleProc",
+                },
+            )
+            content = inaccessible_procedure.content[0]
+            assert isinstance(content, TextContent)
+            assert "[NOT_FOUND]" in content.text
+
+            for tool, extra in (
+                ("list_tables", {}),
+                ("get_table_definition", {"table": "ScopedVisible"}),
+                ("list_stored_procedures", {}),
+            ):
+                result = await client.call_tool(
+                    tool,
+                    {"server": "hidden", "database": live_database.restricted_database, **extra},
+                )
+                content = result.content[0]
+                assert isinstance(content, TextContent)
+                assert result.is_error is True
+                assert "[CONNECTION_FAILED]" in content.text
+                assert live_database.restricted_database not in content.text
+
+    asyncio.run(scenario())
+
+
 def test_live_concurrent_calls_do_not_share_connections(live_database: LiveDatabase) -> None:
     async def scenario() -> None:
         async with Client(create_server(live_database.config), raise_exceptions=True) as client:
