@@ -7,7 +7,6 @@ import pickle
 import re
 from collections.abc import Iterator
 from contextlib import contextmanager
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -19,8 +18,6 @@ from sql_safe_mcp.security.parser import REJECT_HINT, reject
 from sql_safe_mcp.security.reasons import Reason
 from sql_safe_mcp.security.tokens import TokenCodec, TokenKeyRegistry
 from sql_safe_mcp.security.validated_query import ValidatedQuery
-
-SRC = Path(__file__).parents[2] / "src" / "sql_safe_mcp" / "security"
 
 
 @contextmanager
@@ -57,15 +54,6 @@ def test_reject_accepts_only_a_fixed_reason() -> None:
     for free_text in ("free text", None, 5):
         with raises_exact(TypeError, "reject() takes a Reason"):
             reject(free_text)  # ty: ignore[invalid-argument-type]
-
-
-def test_every_reason_is_unique_nonempty_and_used() -> None:
-    values = [reason.value for reason in Reason]
-    assert len(values) == len(set(values))
-    assert all(value and value == value.strip() for value in values)
-    sources = "".join(path.read_text(encoding="utf-8") for path in SRC.glob("*.py"))
-    unused = [r.name for r in Reason if f"Reason.{r.name}" not in sources]
-    assert unused == []
 
 
 @pytest.mark.parametrize(

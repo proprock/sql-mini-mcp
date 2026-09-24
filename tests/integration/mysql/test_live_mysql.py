@@ -154,6 +154,51 @@ def test_live_safe_error_and_permission_paths(live_mysql: LiveMySql) -> None:
     asyncio.run(scenario())
 
 
+def test_live_partially_scoped_login(live_mysql: LiveMySql) -> None:
+    async def scenario() -> None:
+        async with Client(create_server(live_mysql.config), raise_exceptions=True) as client:
+            databases = await client.call_tool("list_databases", {"server": "hidden"})
+            assert databases.structured_content == {"databases": [{"name": live_mysql.database}]}
+            tables = await client.call_tool(
+                "list_tables", {"server": "hidden", "database": live_mysql.database}
+            )
+            assert tables.structured_content == {"tables": [{"schema": None, "name": "users"}]}
+            visible = await client.call_tool(
+                "get_table_definition",
+                {"server": "hidden", "database": live_mysql.database, "table": "users"},
+            )
+            assert visible.is_error is False
+            assert visible.structured_content["name"] == "users"
+            for table in ("audit_events", "missing_table"):
+                result = await client.call_tool(
+                    "get_table_definition",
+                    {"server": "hidden", "database": live_mysql.database, "table": table},
+                )
+                assert "[NOT_FOUND]" in _error_text(result)
+
+            procedures = await client.call_tool(
+                "list_stored_procedures",
+                {"server": "hidden", "database": live_mysql.database},
+            )
+            assert {
+                item["name"] for item in procedures.structured_content["stored_procedures"]
+            } == {"visible_proc", "other_proc"}
+            for tool, extra in (
+                ("list_tables", {}),
+                ("get_table_definition", {"table": "people"}),
+                ("list_stored_procedures", {}),
+            ):
+                result = await client.call_tool(
+                    tool,
+                    {"server": "hidden", "database": live_mysql.sql_database, **extra},
+                )
+                error = _error_text(result)
+                assert "[ACCESS_DENIED]" in error
+                assert live_mysql.sql_database not in error
+
+    asyncio.run(scenario())
+
+
 def test_live_concurrent_calls_do_not_share_connections(live_mysql: LiveMySql) -> None:
     async def scenario() -> None:
         async with Client(create_server(live_mysql.config), raise_exceptions=True) as client:

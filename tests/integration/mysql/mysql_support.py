@@ -113,7 +113,7 @@ def live_server(engine: Engine) -> Iterator[LiveMySql]:
     }
     grants = {
         "app": f"GRANT ALL ON `{database}`.* TO '{{login}}'@'%'",
-        "hidden": f"GRANT SELECT, EXECUTE ON `{database}`.* TO '{{login}}'@'%'",
+        "hidden": f"GRANT EXECUTE ON `{database}`.* TO '{{login}}'@'%'",
     }
     sql_database = f"smm_sql_{suffix}"
     key, other_key = uuid4().bytes * 2, uuid4().bytes * 2
@@ -182,6 +182,7 @@ def live_server(engine: Engine) -> Iterator[LiveMySql]:
                     REFERENCES `{database}`.`users` (tenant_id, id)
             ) ENGINE=InnoDB""",
             f"CREATE TABLE `{database}`.`audit_events` (id INT PRIMARY KEY, note TEXT)",
+            f"GRANT SELECT ON `{database}`.`users` TO '{logins['hidden'][0]}'@'%'",
             # Only the definer sees a routine body; the other logins get NULL.
             f"CREATE DEFINER='{app_login}'@'%' PROCEDURE `{database}`.`visible_proc`() "
             "BEGIN SELECT 1; END",

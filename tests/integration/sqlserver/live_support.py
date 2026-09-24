@@ -20,6 +20,7 @@ class LiveDatabase:
     admin_url: URL
     config: AppConfig
     database: str
+    restricted_database: str
     alpha_schema: str
     beta_schema: str
     emails: tuple[str, str]
@@ -68,6 +69,7 @@ def live_database() -> Iterator[LiveDatabase]:
 
     suffix = uuid4().hex[:12]
     database = "SqlSafeMcpTests"
+    restricted_database = f"smm_scope_{suffix}"
     alpha_schema = f"alpha_{suffix}"
     beta_schema = f"beta_{suffix}"
     app_login = f"smm_app_{suffix}"
@@ -96,6 +98,7 @@ def live_database() -> Iterator[LiveDatabase]:
                 connection,
                 [
                     f"IF DB_ID('{database}') IS NULL EXEC(N'CREATE DATABASE {db}')",
+                    f"CREATE DATABASE {quote_identifier(restricted_database)}",
                     f"ALTER DATABASE {db} SET COMPATIBILITY_LEVEL = 130",
                     f"CREATE LOGIN {app} WITH PASSWORD = '{app_password}', CHECK_POLICY = OFF",
                     f"CREATE LOGIN {hidden} WITH PASSWORD = '{hidden_password}', "
@@ -130,6 +133,7 @@ def live_database() -> Iterator[LiveDatabase]:
                         f"CREATE INDEX [IX_Users_Email] ON {alpha}.[Users] ([Email])",
                         f"CREATE TABLE {beta}.[Users] ([Id] int NOT NULL PRIMARY KEY)",
                         f"CREATE TABLE {alpha}.[Canary] ([Id] int NOT NULL)",
+                        f"CREATE TABLE {alpha}.[ScopedVisible] ([Id] int NOT NULL PRIMARY KEY)",
                         f"CREATE TABLE {alpha}.[Kinds] ([Id] int NOT NULL, [D] date NULL, "
                         "[T] time(3) NULL, [Dt] datetime2(3) NULL, [G] uniqueidentifier NULL, "
                         "[B] varbinary(4) NULL, [F] float NULL, [Flag] bit NULL, [Amt] money NULL)",
@@ -142,6 +146,7 @@ def live_database() -> Iterator[LiveDatabase]:
                         f"GRANT SELECT ON SCHEMA::{beta} TO {app}",
                         f"GRANT VIEW DEFINITION TO {app}",
                         f"GRANT CONNECT TO {hidden}",
+                        f"GRANT SELECT ON OBJECT::{alpha}.[ScopedVisible] TO {hidden}",
                         f"GRANT EXECUTE ON OBJECT::{alpha}.[HiddenProc] TO {hidden}",
                         f"INSERT INTO {alpha}.[Parents] ([TenantId], [Id]) VALUES (1, 1), (1, 2)",
                         f"INSERT INTO {alpha}.[Canary] ([Id]) VALUES (1)",
@@ -208,6 +213,7 @@ def live_database() -> Iterator[LiveDatabase]:
             admin_url,
             config,
             database,
+            restricted_database,
             alpha_schema,
             beta_schema,
             emails,
@@ -245,6 +251,7 @@ def live_database() -> Iterator[LiveDatabase]:
                         f"DROP PROCEDURE IF EXISTS {alpha}.[HiddenProc]",
                         f"DROP TABLE IF EXISTS {alpha}.[Kinds]",
                         f"DROP TABLE IF EXISTS {alpha}.[Canary]",
+                        f"DROP TABLE IF EXISTS {alpha}.[ScopedVisible]",
                         f"DROP TABLE IF EXISTS {beta}.[Users]",
                         f"DROP TABLE IF EXISTS {alpha}.[Users]",
                         f"DROP TABLE IF EXISTS {alpha}.[Parents]",
@@ -270,6 +277,7 @@ def live_database() -> Iterator[LiveDatabase]:
                         "IF EXISTS (SELECT 1 FROM sys.server_principals "
                         f"WHERE name = '{denied_login}') "
                         f"DROP LOGIN {denied}",
+                        f"DROP DATABASE IF EXISTS {quote_identifier(restricted_database)}",
                     ],
                 )
         finally:
